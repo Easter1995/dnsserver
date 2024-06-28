@@ -1,0 +1,5 @@
+project(DNSSERVER)
+aux_source_directory(./src SRC)
+aux_source_directory(. SRC_CUR)
+include_directories(include)
+add_executable(DNSSERVER ${SRC} ${SRC_CUR})
