@@ -71,7 +71,7 @@ bool trie_search(char *domain, uint32_t *ip) {
 void trie_free(Trie *t) {
     if (t == NULL)
         return;
-    for (int i = 0; i < 38; i++) {
+    for (int i = 0; i < 37; i++) {
         if (t->children[i] != NULL) {
             trie_free(t->children[i]);
         }
