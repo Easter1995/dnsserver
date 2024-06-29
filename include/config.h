@@ -2,9 +2,11 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 #define CACHE_SIZE 1024
-#define DNS_PACKET_SIZE 4096
-#include <WinSock2.h>
+#include "list.h"
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #pragma comment(lib, "Ws2_32.lib")
+
 
 /* DNS服务器的配置 */
 typedef struct DNS_CONFIG {
@@ -28,7 +30,6 @@ typedef struct DNS_RUNTIME {
     struct sockaddr_in upstream_addr; // 上级DNS服务器地址
     int totalCount;
 } DNS_RUNTIME;
-
 /* 初始化配置 */
 DNS_CONFIG config_init(int argc, char *argv[]);
 /* 初始化运行时 */

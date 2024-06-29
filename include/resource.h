@@ -2,35 +2,54 @@
 #ifndef RESOURCE_H
 #define RESOURCE_H
 #include <stdio.h>
-#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
 #include "dns.h"
+#include "list.h"
+#include "trie.h"
 
+#define MAX_TABLE_LEN 1024
+#define MAX_CACHE_LEN 1024
+/* 拦截列表，使用字典树存储 */
+#define block_table trie
+
+/**
+ * 拦截列表
+ */
 typedef struct BLOCK_TABLE {
   uint32_t ipv4; // IP
   char* name;    // 域名
 } BLOCK_TABLE;
+/**
+ * cache列表
+ */
+typedef struct CACHE_LIST {
+  struct list_head list;
+  int list_size;
+} CACHE_LIST;
+/* cache条目 */
+typedef struct CACHE_ENTRY {
+  struct list_head list; // 包含了这个节点的两个指针
+  // 数据部分
+  char name[NAME_LEN];
+  uint32_t ip;
+  time_t expireTime;
+  uint32_t count; // LRU算法的计数器
+} CACHE_ENTRY;
+
+/* 点分十进制IPv4字符串转换为32位无符号数 */
+uint32_t ip_to_u32(char ip[IPv4_LEN]);
 /* 初始化拦截表 */
-BLOCK_TABLE* block_table_init();
-
-typedef struct idMap {
-    time_t time;             //过期时间
-    uint16_t originalId;     //请求方ID
-    struct sockaddr_in addr; //请求方IP+端口
-} IdMap;
-/*初始化ID转换表*/
-IdMap *initIdMap();
-IdMap getIdMap(IdMap *idMap, uint16_t i);
-int setIdMap(IdMap *idMap, IdMap item, uint16_t curMaxId);
-
-/*LRUCache*/
-typedef struct {
-    int size;           //当前缓存大小
-    int capacity;       //缓存容量
-    struct hash *table; //哈希表
-    /*双向链表，保存所有资源信息，溢出时采用LRU方法从尾部删除*/
-    struct node *head; //头结点，后继指向最近更新的数据
-    struct node *tail; //尾结点，前驱指向最久未更新的数据，溢出时优先删除此结点（前提是他不是host中的）
-} LRUCache;
+void block_table_init();
+/* 初始化cache */
+void cache_init();
+/* 添加cache */
+void cache_add_one(char *name, uint32_t ip, uint32_t ttl);
+/* 查找cache */
+bool cache_search(char *name, uint32_t *ip);
+/* cache列表，使用双向链表存储 */
+CACHE_LIST cache_list;
 
 /*缓存数据的关键字*/
 typedef struct Key {
