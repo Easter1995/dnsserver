@@ -7,6 +7,7 @@ DNS_CONFIG config_init(int argc, char *argv[]) {
     DNS_CONFIG config;
     config.block_list = FALSE;
     config.debug = FALSE;
+    config.port = 53;
     // 默认上游服务器IP
     strcpy(config.upstream_server_IP, "10.3.9.4");
 

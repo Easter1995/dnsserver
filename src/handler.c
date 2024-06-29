@@ -45,7 +45,7 @@ void socket_init(DNS_RUNTIME *runtime) {
     runtime->server = socket(AF_INET, SOCK_DGRAM, 0);
     runtime->listen_addr.sin_family = AF_INET; // 使用IPv4
     runtime->listen_addr.sin_addr.s_addr = INADDR_ANY; // 监听所有本地网络接口的传入数据
-    runtime->listen_addr.sin_port = htons(default_port); // 默认使用53号端口
+    runtime->listen_addr.sin_port = htons(runtime->config.port); // 默认使用53号端口
     int ret = bind(runtime->server, (struct sockaddr*)&runtime->listen_addr, sizeof(runtime->listen_addr));
     if (ret < 0) {
         printf("ERROR: bind faild: %d\n", errno);
