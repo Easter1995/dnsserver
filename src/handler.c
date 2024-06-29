@@ -3,6 +3,9 @@
 #include <WinSock2.h>
 #include <stdio.h>
 
+/**
+ * 初始化socket
+ */
 void socket_init(DNS_RUNTIME *runtime) {
     WSADATA wsa_data;
     // 使用winsock2.2版本
@@ -27,4 +30,11 @@ void socket_init(DNS_RUNTIME *runtime) {
         printf("ERROR: inet_pton failed\n");
         exit(-1);
     }
+}
+
+/**
+ * 循环处理用户请求
+ */
+void loop(DNS_RUNTIME *runtime) {
+    
 }

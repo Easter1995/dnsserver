@@ -1,4 +1,4 @@
-/* 处理连接 */
+/* 处理网络连接相关以及数据处理 */
 #ifndef HANDLER_H
 #define HANDLER_H
 #include "dns.h"
