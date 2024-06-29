@@ -25,7 +25,9 @@ void block_table_init() {
         // 存入拦截列表
         trie_insert(name, ipv4);
     }
+    fclose(fp); // 关闭文件
 }
+
 /**
  * 初始化cache_list里面的链表部分，链表长度设为0
  */
@@ -131,6 +133,7 @@ bool cache_search(char *name, uint32_t* ip) {
         case WAIT_OBJECT_0:
             // 成功获取互斥量，可以访问共享资源
             list_for_each(pos, &cache_list.list) {
+                entry = list_entry(pos, CACHE_ENTRY, list);
                 // cache命中
                 if (strcmp(entry->name, name) == 0) {
                     // 命中了一个超时的cache，将其删除
@@ -147,8 +150,9 @@ bool cache_search(char *name, uint32_t* ip) {
             }
             if (ret == true) {
                 list_for_each(pos, &cache_list.list) {
+                    entry = list_entry(pos, CACHE_ENTRY, list);
                     // 未命中节点计数器+1
-                    if (entry->count > hit_entry->count) {
+                    if (entry->count > hit_cnt) {
                         entry->count++;
                     }
                 }
@@ -182,7 +186,6 @@ uint32_t ip_to_u32(char ip[IPv4_LEN]) {
             temp_ip[cnt] = 10 * temp_ip[cnt] + (ip[i] - '0');
         }
     }
-    // 存入拦截列表
     uint32_t ipv4 = temp_ip[0] * 256 * 256 * 256 + temp_ip[1] * 256 * 256 + temp_ip[2] * 256 + temp_ip[3];
     return ipv4;
 }
