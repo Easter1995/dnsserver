@@ -2,7 +2,9 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 #define CACHE_SIZE 1024
+#define DNS_PACKET_SIZE 4096
 #include <WinSock2.h>
+#pragma comment(lib, "Ws2_32.lib")
 
 /* DNS服务器的配置 */
 typedef struct DNS_CONFIG {

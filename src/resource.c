@@ -43,3 +43,6 @@ BLOCK_TABLE* block_table_init() {
 
     return block_table;
 }
+MyData FindFromCache(LRUCache *obj, Key key){
+    
+}
