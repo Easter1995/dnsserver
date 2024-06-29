@@ -211,12 +211,88 @@ void HandleFromClient(DNS_RUNTIME *runtime){
         printf("Error sendto: %d\n", WSAGetLastError());
     }
 }
+
 /**
  * 处理上游应答
  */
 void HandleFromUpstream(DNS_RUNTIME *runtime){
-    
+    Buffer buffer = makeBuffer(DNS_PACKET_SIZE);// 创建一个缓冲区，用于存放将来发送的包的数据
+    int status = 0;
+    DNS_PKT packet = recvPacket(runtime, runtime->client, &buffer, &runtime->upstream_addr, &status);
+    if (status <= 0) {
+        // 接收失败 ———— 空包，甚至不需要destroy。
+        free(buffer.data);
+        return;
+    }
+    IdMap client = getIdMap(runtime->idmap, packet.header->ID);// 这步是？
+    packet.header->ID = client.originalId;// 还原id
+    /*将接收到的上游应答 发送回客户端*/
+    if (runtime->config.debug) {
+        char clientIp[16];
+        inet_ntop(AF_INET, &client.addr.sin_addr, clientIp, sizeof(clientIp));
+        printf("C<< Send packet back to client %s:%d\n", clientIp, ntohs(client.addr.sin_port));
+        DNSPacket_print(&packet);
+        runtime->totalCount++;
+        printf("TOTAL COUNT %d\n", runtime->totalCount);
+    }// 需要的话，输出调试信息
+    Buffer buffer_tmp;
+    buffer_tmp = DNSPacket_encode(packet);// 将上游响应的DNS报文转换为buffer
+    for (int i = 0; i < 16; i++) {
+        buffer.data[i] = buffer_tmp.data[i];// 将上游响应的数据内容存入发送缓冲区
+    }
+    free(buffer_tmp.data);
+    status = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client.addr, sizeof(client.addr));
+    if (status < 0) {//为什么不是status < buffer.length？
+        printf("Error sendto: %d\n", WSAGetLastError());
+    }
+    /*判断是否应该缓存*/
+    int shouldCache = 1;
+    if (packet.header->Rcode != OK || !checkCacheable(packet.question->Qtype) || packet.header->ANCOUNT < 1) {
+        shouldCache = 0;// 若在查询中指定域名不存在，或不可checkCache，或上游服务器应答中answer数量<1，则不缓存
+    }
+    if (shouldCache) {
+        // 进缓存
+        Key cacheKey;
+        cacheKey.qtype = packet.question->Qtype;
+        strcpy_s(cacheKey.name, 256, packet.question->name);//为什么不用strcpy？// 把上游响应的域名设为Cache关键字
+        MyData cacheItem;
+        cacheItem.time = time(NULL);
+        cacheItem.answerCount = packet.header->ANCOUNT;
+        cacheItem.answers = (DNS_RECORD *)malloc(sizeof(DNS_RECORD) * packet.header->ANCOUNT);
+         /*准备缓存项*/
+        for (uint16_t i = 0; i < packet.header->ANCOUNT; i++) {
+            DNS_RECORD *newRecord = &cacheItem.answers[i];
+            DNS_RECORD *old = &packet.answer[i];
+            newRecord->TTL = old->TTL;
+            newRecord->type = old->type;
+            newRecord->addr_class = old->addr_class;
+            strcpy_s(newRecord->name, 256, old->name);
+            if (strlen(old->name)) {
+                newRecord->rdata = (char *)malloc(sizeof(char) * 256);
+                strcpy_s(newRecord->name, 256, old->name);
+                toQname(old->name, newRecord->rdata);
+                newRecord->rdlength = (uint16_t)strnlen_s(newRecord->rdata, 256) + 1;
+            } else {
+                newRecord->rdlength = old->rdlength;
+                newRecord->rdata = (char *)malloc(sizeof(char) * newRecord->rdlength);
+                memcpy(newRecord->rdata, old->rdata, newRecord->rdlength);
+                newRecord->name[0] = '\0';
+            }
+        }
+        //lRUCachePut(runtime->Cache, cacheKey, cacheItem); //写入缓存
+        writeCache(runtime->config.cachefile, runtime);   //保存cache文件
+        if (runtime->config.debug) {
+            printf("ADDED TO CACHE\n");
+        }
+    }
+    if (runtime->config.debug) {
+        //printf("CACHE SIZE %d\n", runtime->Cache->size);
+    }
+    // 用完销毁
+    free(buffer.data);
+    DNSPacket_destroy(packet);
 }
+
 /**
  * 循环处理用户请求
  */
