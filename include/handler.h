@@ -7,6 +7,11 @@
 #include "dns.h"
 #include "config.h"
 
+/* 初始化客户端和服务端的socket */
 void socket_init(DNS_RUNTIME *runtime);
+/* 判断此ip是否可以存入cache */
+int IsCacheable(DNSQType type);
+/* 初始化一个DNS空包 */
+DNS_PKT init_DNSpacket();
 
 #endif
