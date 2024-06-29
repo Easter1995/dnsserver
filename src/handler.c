@@ -15,7 +15,7 @@ void socket_init(DNS_RUNTIME *runtime) {
     runtime->listen_addr.sin_port = htons(default_port); // 默认使用53号端口
     int ret = bind(runtime->server, (struct sockaddr*)&runtime->listen_addr, sizeof(runtime->listen_addr));
     if (ret < 0) {
-        perror("ERROR: bind faild: %d\n", errno);
+        printf("ERROR: bind faild: %d\n", errno);
         exit(-1);
     }
     // 发出请求的socket
@@ -24,7 +24,7 @@ void socket_init(DNS_RUNTIME *runtime) {
     runtime->listen_addr.sin_port = htons(default_port); // 默认使用53号端口
     // 将点分十进制形式的 IP 地址转换为网络字节序的二进制形式
     if (inet_pton(AF_INET, runtime->config.upstream_server_IP, &runtime->upstream_addr.sin_addr) <= 0) {
-        perror("ERROR: inet_pton failed\n");
+        printf("ERROR: inet_pton failed\n");
         exit(-1);
     }
 }

@@ -3,7 +3,6 @@
 #define CONFIG_H
 #define CACHE_SIZE 1024
 #include <WinSock2.h>
-#include "resource.h"
 
 /* DNS服务器的配置 */
 typedef struct DNS_CONFIG {
@@ -13,10 +12,10 @@ typedef struct DNS_CONFIG {
 } DNS_CONFIG;
 /* 程序运行时 */
 typedef struct DNS_RUNTIME {
-    DNS_CONFIG config;               // 服务器配置
-    boolean quit;                    // 程序是否退出
-    SOCKET server;                   // 接受请求的socket
-    SOCKET client;                   // 与上级连接的socket
+    DNS_CONFIG config;                // 服务器配置
+    boolean quit;                     // 程序是否退出
+    SOCKET server;                    // 接受请求的socket
+    SOCKET client;                    // 与上级连接的socket
     struct sockaddr_in listen_addr;   // 监听地址
     struct sockaddr_in upstream_addr; // 上级DNS服务器地址
 } DNS_RUNTIME;
