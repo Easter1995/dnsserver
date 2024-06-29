@@ -55,7 +55,7 @@ void cache_add_one(char *name, uint32_t ip, uint32_t ttl) {
 
         list_for_each(pos, &cache_list.list) {
             entry = list_entry(pos, CACHE_ENTRY, list);
-            if (entry->expireTime <= time(NULL)) {
+            if (entry->expireTime < time(NULL)) {
                 has_find_expired_one = true;
                 entry_to_del = entry;
                 cache_list.list_size--;
@@ -93,6 +93,11 @@ bool cache_search(char *name, uint32_t* ip) {
     list_for_each(pos, &cache_list.list) {
         // cache命中
         if (strcmp(entry->name, name) == 0) {
+            // 命中了一个超时的cache，将其删除
+            if (entry->expireTime < time(NULL)) {
+                list_del(&entry->list);
+                return false;
+            }
             ret = true;
             hit_entry = entry;
             hit_cnt = entry->count;
@@ -103,7 +108,7 @@ bool cache_search(char *name, uint32_t* ip) {
     if (ret == true) {
         list_for_each(pos, &cache_list.list) {
             // 未命中节点计数器+1
-            if (entry->count >= hit_entry->count) {
+            if (entry->count > hit_entry->count) {
                 entry->count++;
             }
         }
