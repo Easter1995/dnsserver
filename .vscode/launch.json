@@ -9,7 +9,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}\\build\\DNSSERVER.exe",
-            "args": [],
+            "args": ["-d"],
             "stopAtEntry": false,
             "cwd": "D:\\computer\\CodeBlocks\\mingw64\\bin",
             "environment": [],

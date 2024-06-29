@@ -8,6 +8,11 @@
         "*.css.liquid": "liquid-css",
         "*.scss.liquid": "liquid-scss",
         "*.vue": "vue",
-        "test.h": "c"
+        "test.h": "c",
+        "stdio.h": "c",
+        "dns.h": "c",
+        "stdint.h": "c",
+        "config.h": "c",
+        "resource.h": "c"
     }
 }
