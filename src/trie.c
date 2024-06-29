@@ -1,6 +1,5 @@
 #include "trie.h"
 char ALPHABET[37] = "abcdefghijklmnopqrstuvwxyz0123456789-";
-
 /**
  * 初始化字典树
  */
@@ -12,7 +11,7 @@ void trie_init() {
 /**
  * 字典树插入节点
  */
-void trie_insert(char *domain, uint32_t ip, uint32_t ttl) {
+void trie_insert(char *domain, uint32_t ip) {
     int i;
     Trie *t = trie;
     // 遍历字典树，找到该域名对应的叶子节点，途中如果没有就新建
@@ -34,7 +33,6 @@ void trie_insert(char *domain, uint32_t ip, uint32_t ttl) {
         t->leaf = (Trie_Leaf*)malloc(sizeof(Trie_Leaf));
     }
     t->leaf->ip = ip;
-    t->leaf->expireTime = time(NULL) + ttl; // 过期时间是当前时间加上TTL
 }
 
 /**
@@ -53,20 +51,20 @@ int get_char_index(char c) {
 /**
  * 根据域名查找字典树节点
  */
-bool trie_search(char *domain, uint32_t *ip, uint32_t *ttl) {
+bool trie_search(char *domain, uint32_t *ip) {
     int i;
     Trie *t = trie;
     for (i = 0; i < strlen(domain); i++) {
         int index = get_char_index(domain[i]);
         if (t == NULL)
-        return 0; // 没找到
+        return false; // 没找到
         t = t->children[index];
     }
     t = t->children[0];
     if (t == NULL)
-        return 0; // 没找到
+        return false; // 没找到
     *ip = t->leaf->ip; // 将叶子节点的信息填充进ip
-    *ttl = t->leaf->expireTime - time(NULL); // 将剩余生存时间填充进ttl
+    return true;
 }
 
 /**

@@ -4,12 +4,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "dns.h"
 #include "list.h"
 #include "trie.h"
 
-#define MAX_TABLE_LEN 512
-#define MAX_CACHE_LEN 256
+#define MAX_TABLE_LEN 1024
+#define MAX_CACHE_LEN 1024
+/* 拦截列表，使用字典树存储 */
+#define block_table trie
 
 /**
  * 拦截列表
@@ -18,18 +21,34 @@ typedef struct BLOCK_TABLE {
   uint32_t ipv4; // IP
   char* name;    // 域名
 } BLOCK_TABLE;
-
+/**
+ * cache列表
+ */
 typedef struct CACHE_LIST {
   struct list_head list;
   int list_size;
 } CACHE_LIST;
+/* cache条目 */
+typedef struct CACHE_ENTRY {
+  struct list_head list; // 包含了这个节点的两个指针
+  // 数据部分
+  char name[NAME_LEN];
+  uint32_t ip;
+  time_t expireTime;
+  uint32_t count; // LRU算法的计数器
+} CACHE_ENTRY;
 
+/* 点分十进制IPv4字符串转换为32位无符号数 */
+uint32_t ip_to_u32(char ip[IPv4_LEN]);
 /* 初始化拦截表 */
 void block_table_init();
 /* 初始化cache */
 void cache_init();
-
-BLOCK_TABLE* block_table;
+/* 添加cache */
+void cache_add_one(char *name, uint32_t ip, uint32_t ttl);
+/* 查找cache */
+bool cache_search(char *name, uint32_t *ip);
+/* cache列表，使用双向链表存储 */
 CACHE_LIST cache_list;
 
 #endif

@@ -19,7 +19,7 @@ VS2019 not support typeof()
  */
 
 /**
- * 定义双向链
+ * 定义双向链表
  */
 struct list_head {
   struct list_head *next, *prev;

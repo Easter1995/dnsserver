@@ -17,6 +17,8 @@
         "xlocale": "c",
         "xlocinfo": "c",
         "list.h": "c",
-        "trie.h": "c"
+        "trie.h": "c",
+        "stdlib.h": "c",
+        "handler.h": "c"
     }
 }

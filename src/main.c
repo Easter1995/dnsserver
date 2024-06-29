@@ -3,7 +3,6 @@
 #include "config.h"
 #include "handler.h"
 #include "resource.h"
-#include "trie.h"
 #include "list.h"
 
 #define BUFF_SIZE 1024
