@@ -45,30 +45,39 @@ void cache_add_one(char *name, uint32_t ip, uint32_t ttl) {
     cache_entry->ip = ip;
     cache_entry->count = 0;
     cache_entry->expireTime = time(NULL) + ttl;
+
     // 链表满了，优先删除expire time到了的节点，然后考虑使用LRU删除一个节点
     if (cache_list.list_size == MAX_CACHE_LEN) {
-        struct list_head *pos;
+        struct list_head *pos, *n;
         CACHE_ENTRY *entry; // 当前遍历到的节点
-        CACHE_ENTRY *entry_to_del; // 要删除的节点
+        CACHE_ENTRY *entry_to_del = NULL; // 要删除的节点
         bool has_find_expired_one = false;
         uint32_t max_lru_cnt = 0;
 
-        list_for_each(pos, &cache_list.list) {
+        list_for_each_safe(pos, n, &cache_list.list) {
             entry = list_entry(pos, CACHE_ENTRY, list);
+            // 删除所有超时的链表
             if (entry->expireTime < time(NULL)) {
                 has_find_expired_one = true;
-                list_del(&entry);
+                list_del(&entry->list);
+                free(entry);
                 cache_list.list_size--;
             }
+            // 找出LRU最大的链表，如果已经删除了超时的就不用删除这一条了
             if (entry->count > max_lru_cnt && !has_find_expired_one) {
                 max_lru_cnt = entry->count;
                 entry_to_del = entry;
-                cache_list.list_size--;
             }
         }
-        list_del(&entry_to_del->list);
-        free(entry_to_del);
+
+        // 如果没有超时的，就删除计数器最大的
+        if (!has_find_expired_one && entry_to_del) {
+            list_del(&entry_to_del->list);
+            free(entry_to_del);
+            cache_list.list_size--;
+        }
     }
+
     // LRU：除新加入的节点外，其余未命中节点计数器+1
     struct list_head *pos;
     CACHE_ENTRY *entry; // 当前遍历到的节点
@@ -76,7 +85,9 @@ void cache_add_one(char *name, uint32_t ip, uint32_t ttl) {
         entry = list_entry(pos, CACHE_ENTRY, list);
         entry->count++;
     }
-    list_add(&cache_entry->list, &cache_list);
+
+    // 添加新节点到链表头部
+    list_add(&cache_entry->list, &cache_list.list);
     cache_list.list_size++;
 }
 
