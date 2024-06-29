@@ -5,33 +5,6 @@
 #include <WinSock2.h>
 #include <stdio.h>
 
-/**
- * 一次读32位，需要移动4个字节
- */
-uint8_t *_read32(uint8_t *ptr, uint32_t *value) {
-    *value = ntohl(*(uint32_t *)ptr);
-    return ptr + 4;
-}
-uint8_t *_write32(uint8_t *ptr, uint32_t value) {
-    *(uint32_t *)ptr = htonl(value);
-    return ptr + 4;
-}
-uint8_t *_read16(uint8_t *ptr, uint16_t *value) {
-    *value = ntohs(*(uint16_t *)ptr);
-    return ptr + 2;
-}
-uint8_t *_write16(uint8_t *ptr, uint16_t value) {
-    *(uint16_t *)ptr = htons(value);
-    return ptr + 2;
-}
-uint8_t *_read8(uint8_t *ptr, uint8_t *value) {
-    *value = *(uint8_t *)ptr;
-    return ptr + 1;
-}
-uint8_t *_write8(uint8_t *ptr, uint8_t value) {
-    *(uint8_t *)ptr = value;
-    return ptr + 1;
-}
 
 /**
  * 初始化socket
@@ -90,8 +63,18 @@ void loadCache(uint8_t * buff, char * domainName, int qname_length){
     cnt ++;
     if(cnt == ANCOUNT) break;
   }
-
 }
+
+/*
+ * 判断是否该包类型是否可以在cache中缓存
+ */
+int IsCacheable(DNSQType type){
+    if (type == A || type == AAAA || type == CNAME || type == PTR || type == NS || type == TXT) {
+        return 1;
+    }
+    return 0;
+}
+
 /**
  * 初始化DNS空包
  */
@@ -108,6 +91,18 @@ DNS_PKT init_DNSpacket(){
     return packet;     //返回空包
 }
 
+/**
+ * 生成回应包
+ */
+DNS_PKT prepare_answerPacket(int ip)
+{
+    DNS_PKT packet;
+    packet.header->Rcode = OK;
+    packet.header->QR = QRRESPONSE;
+    packet.header->ANCOUNT=1;//找到目标ip的数量
+    packet.answer=ip;
+    return packet;
+}
 /**
  * 接收DNS包
  */
@@ -138,6 +133,7 @@ DNS_PKT recvPacket(DNS_RUNTIME *runtime, SOCKET socket, Buffer *buffer, struct s
     }
     return packet;
 }
+
 /**
  * 处理客户端请求
  */
@@ -166,14 +162,52 @@ void HandleFromClient(DNS_RUNTIME *runtime){
         return;
     }
     //先在本地cache中搜索
-    if(checkCacheable(dnspacket.question->Qtype)){
-        uint32_t ip;
-        bool find_result=cache_search(dnspacket.question->name,&ip);
+    if(IsCacheable(dnspacket.question->Qtype)){
+        uint32_t target_ip;
+        bool find_result=cache_search(dnspacket.question->name,&target_ip);
         if(find_result){//若在cache中查询到了结果
             if(runtime->config.debug){//打印debug信息
-                printf("Cache Hint! Expected ip is %d",ip);
+                printf("Cache Hint! Expected ip is %d",target_ip);
             }
+            DNS_PKT prepare_answerpacket(target_ip);
+            if(runtime->config.debug){//输出调试信息
+                printf("Send packet back to client %s:%d\n",inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
+                DNSPacket_print(&dnspacket);
+                runtime->totalCount++;
+                printf("TOTAL COUNT %d\n", runtime->totalCount);
+                printf("CACHE SIZE %d\n", cache_list.list_size);
+            }
+            dnspacket.header->RA = 1;
+            buffer = DNSPacket_encode(dnspacket);//将DNS包转换为buffer，方便发送
+            DNSPacket_destroy(dnspacket);
+            int sendBytes = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_Addr, sizeof(sizeof(client_Addr)));//由服务器发给客户端找到的ip信息
+            free(buffer.data);//数据发送完后释放缓存
+            if (sendBytes == SOCKET_ERROR) {
+                printf("sendto failed: %d\n", WSAGetLastError());
+                WSACleanup();
+            }else
+                printf("Sent %d bytes to server.\n",sendBytes);
+            return;
         }
+    }
+    /*若cache未命中，则需要向上级发送包进一步查询*/
+    IdMap mapItem;//声明一个ID转换表
+    mapItem.addr = client_Addr;//请求方的地址
+    mapItem.originalId = dnspacket.header->ID;//请求方的ID
+    mapItem.time = time(NULL) + IDMAP_TIMEOUT;//设置该记录的过期时间
+    runtime->maxId = setIdMap(runtime->idmap, mapItem, runtime->maxId);
+    dnspacket.header->ID = runtime->maxId;
+    // 发走
+    if (runtime->config.debug) {
+        printf("Send packet to upstream\n");
+        DNSPacket_print(&dnspacket);
+    }
+    buffer = DNSPacket_encode(dnspacket);
+    DNSPacket_destroy(dnspacket);
+    status = sendto(runtime->client, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&runtime->upstream_addr, sizeof(runtime->upstream_addr));
+    free(buffer.data);
+    if (status < 0) {
+        printf("Error sendto: %d\n", WSAGetLastError());
     }
 }
 /**
@@ -272,4 +306,49 @@ DNS_PKT DNSPacket_decode(Buffer *buffer) {
         buffer->length = 0;
         return packet;
     }
+}
+
+/**
+ * 解析数据包时指针的移动
+ */
+uint8_t *_read32(uint8_t *ptr, uint32_t *value) {
+    *value = ntohl(*(uint32_t *)ptr);
+    return ptr + 4;
+}
+uint8_t *_write32(uint8_t *ptr, uint32_t value) {
+    *(uint32_t *)ptr = htonl(value);
+    return ptr + 4;
+}
+uint8_t *_read16(uint8_t *ptr, uint16_t *value) {
+    *value = ntohs(*(uint16_t *)ptr);
+    return ptr + 2;
+}
+uint8_t *_write16(uint8_t *ptr, uint16_t value) {
+    *(uint16_t *)ptr = htons(value);
+    return ptr + 2;
+}
+uint8_t *_read8(uint8_t *ptr, uint8_t *value) {
+    *value = *(uint8_t *)ptr;
+    return ptr + 1;
+}
+uint8_t *_write8(uint8_t *ptr, uint8_t value) {
+    *(uint8_t *)ptr = value;
+    return ptr + 1;
+}
+
+/**
+ * IDMap的初始化
+ */
+int setIdMap(IdMap *idMap, IdMap item, uint16_t curMaxId) {
+    uint16_t originId = curMaxId;
+    time_t t = time(NULL);
+    while (idMap[curMaxId].time >= t) {
+        curMaxId++;
+        curMaxId %= MAXID;
+        if (curMaxId == originId) {
+            return -1;
+        }
+    }
+    idMap[curMaxId] = item;
+    return curMaxId % MAXID;
 }

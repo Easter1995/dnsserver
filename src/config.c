@@ -29,11 +29,10 @@ DNS_CONFIG config_init(int argc, char *argv[]) {
 
 DNS_RUNTIME runtime_init(DNS_CONFIG *config) {
     DNS_RUNTIME runtime;
-    runtime.quit = FALSE;
     runtime.config = *config;
+    runtime.quit = FALSE;
     runtime.idmap = initIdMap();
     runtime.maxId = 0;
-    runtime.lruCache = lRUCacheCreate(MAXCACHE);
     runtime.totalCount = 0;
     return runtime;
 }
