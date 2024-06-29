@@ -277,14 +277,14 @@ void HandleFromUpstream(DNS_RUNTIME *runtime){
                 newRecord->name[0] = '\0';
             }
         }
-        lRUCachePut(runtime->Cache, cacheKey, cacheItem); //写入缓存
-        writeCache(runtime->config.cachefile, runtime);      //保存cache文件
+        //lRUCachePut(runtime->Cache, cacheKey, cacheItem); //写入缓存
+        writeCache(runtime->config.cachefile, runtime);   //保存cache文件
         if (runtime->config.debug) {
             printf("ADDED TO CACHE\n");
         }
     }
     if (runtime->config.debug) {
-        printf("CACHE SIZE %d\n", runtime->Cache->size);
+        //printf("CACHE SIZE %d\n", runtime->Cache->size);
     }
     // 用完销毁
     free(buffer.data);
