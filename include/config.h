@@ -25,7 +25,7 @@ typedef struct DNS_RUNTIME {
     SOCKET client;                    // 与上级连接的socket
     IdMap *idmap;                     //ID转换表 （ID：对一次DNS请求的标识，用于确定请求方）
     uint16_t maxId;                   //上一次请求上级时所使用的ID号
-    LRUCache *lruCache;               //缓存来自上级的查询结果，如果请求在缓存内，则直接回复
+    CACHE_LIST *Cache;               //缓存来自上级的查询结果，如果请求在缓存内，则直接回复
     struct sockaddr_in listen_addr;   // 监听地址
     struct sockaddr_in upstream_addr; // 上级DNS服务器地址
     int totalCount;
@@ -35,4 +35,12 @@ DNS_CONFIG config_init(int argc, char *argv[]);
 /* 初始化运行时 */
 DNS_RUNTIME runtime_init(DNS_CONFIG *config);
 
+typedef struct idMap {
+    time_t time;             //过期时间
+    uint16_t originalId;     //请求方ID
+    struct sockaddr_in addr; //请求方IP+端口
+} IdMap;
+IdMap *initIdMap();
+IdMap getIdMap(IdMap *idMap, uint16_t i);
+int setIdMap(IdMap *idMap, IdMap item, uint16_t curMaxId);
 #endif
