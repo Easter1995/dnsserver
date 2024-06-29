@@ -35,6 +35,7 @@ void socket_init(DNS_RUNTIME *runtime) {
         exit(-1);
     }
 
+    // 初始化本机服务器地址
     runtime->listen_addr.sin_family = AF_INET; // 使用IPv4
     runtime->listen_addr.sin_addr.s_addr = INADDR_ANY; // 监听所有本地网络接口的传入数据
     runtime->listen_addr.sin_port = htons(runtime->config.port); // 使用配置中指定的端口
@@ -55,6 +56,7 @@ void socket_init(DNS_RUNTIME *runtime) {
         exit(-1);
     }
 
+    // 初始化上游服务器的地址
     runtime->upstream_addr.sin_family = AF_INET; // 使用IPv4
     runtime->upstream_addr.sin_port = htons(default_port); // 默认使用53号端口
 
