@@ -12,62 +12,61 @@
 void socket_init(DNS_RUNTIME *runtime) {
     WSADATA wsa_data;
     // 使用winsock2.2版本
-    WSAStartup(MAKEWORD(2, 2), &wsa_data);
-    uint16_t default_port = 53;
-    // 监听请求的socket
-    runtime->server = socket(AF_INET, SOCK_DGRAM, 0);
-    runtime->listen_addr.sin_family = AF_INET; // 使用IPv4
-    runtime->listen_addr.sin_addr.s_addr = INADDR_ANY; // 监听所有本地网络接口的传入数据
-    runtime->listen_addr.sin_port = htons(default_port); // 默认使用53号端口
-    int ret = bind(runtime->server, (struct sockaddr*)&runtime->listen_addr, sizeof(runtime->listen_addr));
-    if (ret < 0) {
-        printf("ERROR: bind faild: %d\n", errno);
+    if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) {
+        printf("ERROR: WSAStartup failed\n");
         exit(-1);
     }
+
+    uint16_t default_port = 53;
+
+    // 监听请求的socket
+    runtime->server = socket(AF_INET, SOCK_DGRAM, 0);
+    if (runtime->server == INVALID_SOCKET) {
+        printf("ERROR: socket creation failed\n");
+        WSACleanup();
+        exit(-1);
+    }
+
+    const int REUSE = 1;
+    if (setsockopt(runtime->server, SOL_SOCKET, SO_REUSEADDR, (const char *)&REUSE, sizeof(REUSE)) < 0) {
+        printf("ERROR: setsockopt failed\n");
+        closesocket(runtime->server);
+        WSACleanup();
+        exit(-1);
+    }
+
+    runtime->listen_addr.sin_family = AF_INET; // 使用IPv4
+    runtime->listen_addr.sin_addr.s_addr = INADDR_ANY; // 监听所有本地网络接口的传入数据
+    runtime->listen_addr.sin_port = htons(runtime->config.port); // 使用配置中指定的端口
+
+    if (bind(runtime->server, (struct sockaddr*)&runtime->listen_addr, sizeof(runtime->listen_addr)) < 0) {
+        printf("ERROR: bind failed: %d\n", WSAGetLastError());
+        closesocket(runtime->server);
+        WSACleanup();
+        exit(-1);
+    }
+
     // 发出请求的socket
     runtime->client = socket(AF_INET, SOCK_DGRAM, 0);
-    runtime->listen_addr.sin_family = AF_INET; // 使用IPv4
-    runtime->listen_addr.sin_port = htons(default_port); // 默认使用53号端口
+    if (runtime->client == INVALID_SOCKET) {
+        printf("ERROR: socket creation failed\n");
+        closesocket(runtime->server);
+        WSACleanup();
+        exit(-1);
+    }
+
+    runtime->upstream_addr.sin_family = AF_INET; // 使用IPv4
+    runtime->upstream_addr.sin_port = htons(default_port); // 默认使用53号端口
+
     // 将点分十进制形式的 IP 地址转换为网络字节序的二进制形式
     if (inet_pton(AF_INET, runtime->config.upstream_server_IP, &runtime->upstream_addr.sin_addr) <= 0) {
         printf("ERROR: inet_pton failed\n");
+        closesocket(runtime->server);
+        closesocket(runtime->client);
+        WSACleanup();
         exit(-1);
     }
 }
-void loadCache(uint8_t * buff, char * domainName, int qname_length){
-    uint8_t * tmp = (buff + LEN_DNS_HEADER + qname_length + LEN_DNS_QUESTION);
-    uint32_t * ipv4;
-    struct DNS_HEADER * header = (struct DNS_HEADER *) buff;
-    uint16_t ANCOUNT = header -> ANCOUNT;
-    int cnt = 0;
-    while(1) {//跳过TYPE为CNAME的ANSWER，取得第一个TYPE为A的ANSWER的RDATA字段
-        uint8_t * name = tmp;
-        int name_length = 0;
-        while(1) {
-            name_length ++;
-            if(*name == 0) break;
-            if(*name == 0xc0) {
-                name_length ++;
-                break;
-            }
-      name ++;
-    }
-
-    uint16_t * TYPE = (uint16_t * )(tmp + name_length);
-    uint16_t * rd_length = (uint16_t *)(tmp + name_length + 8);
-    if(ntohs(*TYPE) == 1) {//回答为A
-      ipv4 = (uint32_t *)(tmp + name_length + 10);
-      trie_insert(domainName, ntohl(*ipv4));
-    }
-    tmp = (tmp + name_length + 10 + ntohs(*rd_length));
-    cnt ++;
-    if(cnt == ANCOUNT) break;
-  }
-}
-
-/*
- * 判断是否该包类型是否可以在cache中缓存
- */
 int IsCacheable(DNSQType type){
     if (type == A || type == AAAA || type == CNAME || type == PTR || type == NS || type == TXT) {
         return 1;

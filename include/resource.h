@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <Windows.h>
 #include <time.h>
 #include "dns.h"
 #include "list.h"
@@ -27,6 +28,7 @@ typedef struct BLOCK_TABLE {
 typedef struct CACHE_LIST {
   struct list_head list;
   int list_size;
+  HANDLE lock; // 互斥量句柄
 } CACHE_LIST;
 /**
  * cache条目
@@ -50,6 +52,8 @@ void cache_init();
 void cache_add_one(char *name, uint32_t ip, uint32_t ttl);
 /* 查找cache */
 bool cache_search(char *name, uint32_t *ip);
+/* 获取cache_list的互斥量句柄 */
+HANDLE get_cache_lock();
 /* cache列表，使用双向链表存储 */
 CACHE_LIST cache_list;
 

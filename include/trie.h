@@ -21,11 +21,11 @@ typedef struct Trie_Leaf {
  * 字典树节点
  */
 typedef struct Trie {
-  union {
-    struct Trie* children[38]; // 26个字母、0~9、-符号和一个结束标识
-    Trie_Leaf* leaf;
-  };
+    struct Trie* children[37]; // 包括26个字母、0~9、.符号
+    Trie_Leaf* leaf;           // 叶子节点信息
+    bool is_end;               // 标识是否为一个完整的域名结尾
 } Trie;
+
 Trie* trie;
 /* 初始化字典树 */
 void trie_init();
