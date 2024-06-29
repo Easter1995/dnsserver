@@ -4,6 +4,9 @@
 
 #include<stdio.h>
 #include <stdint.h>
+#define LEN_DNS_HEADER sizeof(struct DNS_HEADER)
+#define LEN_DNS_QUESTION sizeof(struct DNS_QUESTION)
+#define LEN_DNS_ANSWER sizeof(struct DNS_ANSWER)
 #define NAME_LEN 256
 #define IPv4_LEN 16
 /* Header Section Format */

@@ -1,4 +1,5 @@
 #include "handler.h"
+#include "config.h"
 #include <WS2tcpip.h>
 #include <WinSock2.h>
 #include <stdio.h>
@@ -27,4 +28,35 @@ void socket_init(DNS_RUNTIME *runtime) {
         printf("ERROR: inet_pton failed\n");
         exit(-1);
     }
+}
+void loadCache(uint8_t * buff, char * domainName, int qname_length){
+    uint8_t * tmp = (buff + LEN_DNS_HEADER + qname_length + LEN_DNS_QUESTION);
+    uint32_t * ipv4;
+    struct DNS_HEADER * header = (struct DNS_HEADER *) buff;
+    uint16_t ANCOUNT = header -> ANCOUNT;
+    int cnt = 0;
+    while(1) {//跳过TYPE为CNAME的ANSWER，取得第一个TYPE为A的ANSWER的RDATA字段
+        uint8_t * name = tmp;
+        int name_length = 0;
+        while(1) {
+            name_length ++;
+            if(*name == 0) break;
+            if(*name == 0xc0) {
+                name_length ++;
+                break;
+            }
+      name ++;
+    }
+
+    uint16_t * TYPE = (uint16_t * )(tmp + name_length);
+    uint16_t * rd_length = (uint16_t *)(tmp + name_length + 8);
+    if(ntohs(*TYPE) == 1) {//回答为A
+      ipv4 = (uint32_t *)(tmp + name_length + 10);
+      trie_insert(domainName, ntohl(*ipv4));
+    }
+    tmp = (tmp + name_length + 10 + ntohs(*rd_length));
+    cnt ++;
+    if(cnt == ANCOUNT) break;
+  }
+
 }

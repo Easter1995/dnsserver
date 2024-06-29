@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include "config.h"
 #include "resource.h"
-
+#define MAXCACHE 1024
 /* 初始化DNS服务器配置 */
 DNS_CONFIG config_init(int argc, char *argv[]) {
     DNS_CONFIG config;
@@ -31,5 +31,11 @@ DNS_RUNTIME runtime_init(DNS_CONFIG *config) {
     DNS_RUNTIME runtime;
     runtime.quit = FALSE;
     runtime.config = *config;
+    runtime.idmap = initIdMap();
+    runtime.maxId = 0;
+    runtime.lruCache = lRUCacheCreate(MAXCACHE);
+    runtime.totalCount = 0;
+    loadCache(config->cachefile, &runtime);
+    loadConfig(config->hostfile, runtime.lruCache);
     return runtime;
 }
