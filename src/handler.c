@@ -97,10 +97,10 @@ void loadCache(uint8_t * buff, char * domainName, int qname_length){
  */
 DNS_PKT init_DNSpacket(){
     DNS_PKT packet;
-    packet.Answers = NULL;
-    packet.Queries = NULL;
-    packet.Additional = NULL;
-    packet.Authorities = NULL;
+    packet.answer = NULL;
+    packet.question = NULL;
+    packet.additional = NULL;
+    packet.authority = NULL;
     packet.header->QDCOUNT = 0;
     packet.header->ANCOUNT = 0;
     packet.header->NSCOUNT = 0;
@@ -162,19 +162,16 @@ void HandleFromClient(DNS_RUNTIME *runtime){
         dnspacket.header->Rcode = FORMERR;
         buffer = DNSPacket_encode(dnspacket);
         DNSPacket_destroy(dnspacket);
-        sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&clientAddr, sizeof(clientAddr));
+        sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_Addr, sizeof(client_Addr));
         return;
     }
     //先在本地cache中搜索
-    if(checkCacheable(dnspacket.Queries->Qtype)){
-        Key key;
-        key.qtype=dnspacket.Queries->Qtype;
-        strcpy_s(key.name,256, dnspacket.Queries[0].name);
-        MyData Data=FindFromCache(runtime->lruCache,key);
-        uint32_t cacheTime=(uint32_t)(time(NULL) - Data.time);
-        if(Data.answerCount>0){//若在cache中查询到了结果
+    if(checkCacheable(dnspacket.question->Qtype)){
+        uint32_t ip;
+        bool find_result=cache_search(dnspacket.question->name,&ip);
+        if(find_result){//若在cache中查询到了结果
             if(runtime->config.debug){//打印debug信息
-                printf("");
+                printf("Cache Hint! Expected ip is %d",ip);
             }
         }
     }

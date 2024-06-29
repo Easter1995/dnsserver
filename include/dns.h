@@ -9,6 +9,7 @@
 #define LEN_DNS_ANSWER sizeof(struct DNS_ANSWER)
 #define NAME_LEN 256
 #define IPv4_LEN 16
+#define DNS_PACKET_SIZE 4096
 
 typedef uint8_t bit;
 typedef enum {

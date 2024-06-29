@@ -21,5 +21,5 @@ int main(int argc, char **argv) {
     /* 初始化socket */
     socket_init(&runtime);
     /* 处理客户端请求 */
-    
+    loop(&runtime);
 }

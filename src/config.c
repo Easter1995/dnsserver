@@ -35,7 +35,5 @@ DNS_RUNTIME runtime_init(DNS_CONFIG *config) {
     runtime.maxId = 0;
     runtime.lruCache = lRUCacheCreate(MAXCACHE);
     runtime.totalCount = 0;
-    loadCache(config->cachefile, &runtime);
-    loadConfig(config->hostfile, runtime.lruCache);
     return runtime;
 }
