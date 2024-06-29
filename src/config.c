@@ -31,6 +31,5 @@ DNS_RUNTIME runtime_init(DNS_CONFIG *config) {
     DNS_RUNTIME runtime;
     runtime.quit = FALSE;
     runtime.config = *config;
-    
     return runtime;
 }

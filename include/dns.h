@@ -5,6 +5,7 @@
 #include<stdio.h>
 #include <stdint.h>
 #define NAME_LEN 256
+#define IPv4_LEN 16
 /* Header Section Format */
 typedef struct DNS_HEADER {
     uint16_t ID;
