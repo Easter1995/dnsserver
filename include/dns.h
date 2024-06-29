@@ -34,19 +34,19 @@ typedef enum {
 
 /* Header Section Format */
 typedef struct DNS_HEADER {
-    uint16_t ID;    //会话标识
-    uint8_t RD : 1; //flags标志
-    uint8_t TC : 1;
-    uint8_t AA : 1;
-    uint8_t Opcode : 4;
-    uint8_t QR : 1;
-    uint8_t Rcode : 4;
-    uint8_t Z : 3;
-    uint8_t RA : 1;
-    uint16_t QDCOUNT;//问题数
-    uint16_t ANCOUNT;//回答资源记录数
-    uint16_t NSCOUNT;//授权资源记录数
-    uint16_t ARCOUNT;//附加资源记录数
+    uint16_t ID;        //会话标识
+    uint8_t RD : 1;     //表示期望递归
+    uint8_t TC : 1;     //表示可截断的
+    uint8_t AA : 1;     //表示授权回答
+    uint8_t Opcode : 4; //0表示标准查询，1表示反向查询，2表示服务器状态请求
+    uint8_t QR : 1;     //查询、响应标识，0为查询，1为响应
+    uint8_t Rcode : 4;  //应答码
+    uint8_t Z : 3;      //保留值。在所有请求和应答报文中置为零
+    uint8_t RA : 1;     //表示可用递归
+    uint16_t QDCOUNT;   //问题数
+    uint16_t ANCOUNT;   //回答资源记录数
+    uint16_t NSCOUNT;   //授权资源记录数
+    uint16_t ARCOUNT;   //附加资源记录数
 } DNS_HEADER;
 
 /* Question Section Format */
@@ -64,6 +64,7 @@ typedef struct DNS_RECORD {
     uint32_t TTL;           // 有效时间
     uint16_t rdlength;      // rdata的长度
     char *rdata;            // 指向资源数据的指针
+    char rdataName[256];  //某些资源需要decode成字符串
 } DNS_RECORD;
 
 /* DNS的资源记录类型 */
