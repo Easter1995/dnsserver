@@ -57,7 +57,7 @@ void cache_add_one(char *name, uint32_t ip, uint32_t ttl) {
             entry = list_entry(pos, CACHE_ENTRY, list);
             if (entry->expireTime < time(NULL)) {
                 has_find_expired_one = true;
-                entry_to_del = entry;
+                list_del(&entry);
                 cache_list.list_size--;
             }
             if (entry->count > max_lru_cnt && !has_find_expired_one) {
@@ -68,7 +68,6 @@ void cache_add_one(char *name, uint32_t ip, uint32_t ttl) {
         }
         list_del(&entry_to_del->list);
         free(entry_to_del);
-        
     }
     // LRU：除新加入的节点外，其余未命中节点计数器+1
     struct list_head *pos;

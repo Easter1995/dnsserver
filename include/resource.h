@@ -28,7 +28,9 @@ typedef struct CACHE_LIST {
   struct list_head list;
   int list_size;
 } CACHE_LIST;
-/* cache条目 */
+/**
+ * cache条目
+ */
 typedef struct CACHE_ENTRY {
   struct list_head list; // 包含了这个节点的两个指针
   // 数据部分
