@@ -1,7 +1,4 @@
 #include "handler.h"
-#include <WS2tcpip.h>
-#include <WinSock2.h>
-#include <stdio.h>
 
 /**
  * 初始化socket

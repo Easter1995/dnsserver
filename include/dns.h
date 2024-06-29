@@ -55,12 +55,13 @@ typedef enum {
     OPT = 41      //EDNS
 } DNSQType;     
 
-/* DNS报文 */
-typedef struct DNS_PKT
-{
+/* DNS 报文,后三段格式相同，每段都是由0~n个资源记录(Resource Record)构成 */
+typedef struct DNS_PKT {
     DNS_HEADER *header;
-    DNS_QUESTION *question;
-    DNS_RECORD *record;
+    DNS_QUESTION *question;   
+    DNS_RECORD *answer;     
+    DNS_RECORD *authority;  
+    DNS_RECORD *additional; 
 } DNS_PKT;
 
 #endif

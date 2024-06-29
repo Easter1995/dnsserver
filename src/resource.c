@@ -1,15 +1,13 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include "resource.h"
-#include "dns.h"
 
-#define MAX_TABLE_LEN 512
+char ALPHABET[37] = "abcdefghijklmnopqrstuvwxyz0123456789-"; // 字典树里面的字符
 uint32_t block_table_number = 0;
 
-/* 初始化拦截列表 */
-BLOCK_TABLE* block_table_init() {
-    BLOCK_TABLE* block_table = (BLOCK_TABLE*) malloc(sizeof(BLOCK_TABLE) * MAX_TABLE_LEN);
+/**
+ * 初始化拦截列表
+ */
+void block_table_init() {
+    block_table = (BLOCK_TABLE*) malloc(sizeof(BLOCK_TABLE) * MAX_TABLE_LEN);
     // 打开拦截列表文件
     FILE *fp = fopen("D:\\ComputerNetworking\\dnsserver\\src\\blocklist.dic", "r");
     if (fp == NULL) {
@@ -40,6 +38,12 @@ BLOCK_TABLE* block_table_init() {
         block_table_number++;
         printf("block a website: %s\n", block_table[block_table_number - 1].name);
     }
-
-    return block_table;
+}
+/**
+ * 初始化cache
+ */
+void cache_init() {
+    memset(&cache_list.list, 0, sizeof(cache_list.list));
+    INIT_LIST_HEAD(&cache_list.list);
+    cache_list.list_size = 0;
 }
