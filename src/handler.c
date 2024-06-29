@@ -145,7 +145,7 @@ void HandleFromClient(DNS_RUNTIME *runtime){
         return;
     }
     free(buffer.data);//释放缓存
-    if (dnspacket.header->QR!= QRQUERY || dnspacket.header->QDCOUNT < 1) {
+    if (dnspacket.header->QR!= QRQUERY || dnspacket.header->QDCOUNT < 1) {//???????
         DNSPacket_destroy(dnspacket); //销毁packet，解除内存占用
         return;
     }
@@ -168,17 +168,17 @@ void HandleFromClient(DNS_RUNTIME *runtime){
             if(runtime->config.debug){//打印debug信息
                 printf("Cache Hint! Expected ip is %d",target_ip);
             }
-            DNS_PKT prepare_answerpacket(target_ip);
+            DNS_PKT answer_Packet=prepare_answerpacket(target_ip);
             if(runtime->config.debug){//输出调试信息
                 printf("Send packet back to client %s:%d\n",inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
-                DNSPacket_print(&dnspacket);
+                DNSPacket_print(&answer_Packet);//???????
                 runtime->totalCount++;
                 printf("TOTAL COUNT %d\n", runtime->totalCount);
                 printf("CACHE SIZE %d\n", cache_list.list_size);
             }
-            dnspacket.header->RA = 1;
-            buffer = DNSPacket_encode(dnspacket);//将DNS包转换为buffer，方便发送
-            DNSPacket_destroy(dnspacket);
+            answer_Packet.header->RA = 1;
+            buffer = DNSPacket_encode(answer_Packet);//将DNS包转换为buffer，方便发送
+            DNSPacket_destroy(answer_Packet);
             int sendBytes = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_Addr, sizeof(sizeof(client_Addr)));//由服务器发给客户端找到的ip信息
             free(buffer.data);//数据发送完后释放缓存
             if (sendBytes == SOCKET_ERROR) {
