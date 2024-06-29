@@ -4,12 +4,37 @@
 
 #include<stdio.h>
 #include <stdint.h>
+#define LEN_DNS_HEADER sizeof(struct DNS_HEADER)
+#define LEN_DNS_QUESTION sizeof(struct DNS_QUESTION)
+#define LEN_DNS_ANSWER sizeof(struct DNS_ANSWER)
 #define NAME_LEN 256
 #define IPv4_LEN 16
+
+typedef uint8_t bit;
+typedef enum {
+    QRQUERY,   //DNSpacket类型是query
+    QRRESPONSE //DNSpacket类型是response
+} DNSPacketQR;
+
+typedef enum {
+    QUERY,  //标准查询
+    IQUERY, //反向查询
+    STATUS  //服务器状态请求
+} DNSPacketOP;
+
+typedef enum {
+    OK,        //无错误
+    FORMERR,   //报文格式错误
+    SERVFAIL,  //域名服务器失败
+    NXDOMAIN,  //域名不存在
+    NOTIMP,    //查询类型不支持
+    REFUSED    //查询请求被拒绝
+} DNSPacketRC; //表示响应的差错状态
+
 /* Header Section Format */
 typedef struct DNS_HEADER {
-    uint16_t ID;
-    uint8_t RD : 1;
+    uint16_t ID;    //会话标识
+    uint8_t RD : 1; //flags标志
     uint8_t TC : 1;
     uint8_t AA : 1;
     uint8_t Opcode : 4;
@@ -17,10 +42,10 @@ typedef struct DNS_HEADER {
     uint8_t Rcode : 4;
     uint8_t Z : 3;
     uint8_t RA : 1;
-    uint16_t QDCOUNT;
-    uint16_t ANCOUNT;
-    uint16_t NSCOUNT;
-    uint16_t ARCOUNT;
+    uint16_t QDCOUNT;//问题数
+    uint16_t ANCOUNT;//回答资源记录数
+    uint16_t NSCOUNT;//授权资源记录数
+    uint16_t ARCOUNT;//附加资源记录数
 } DNS_HEADER;
 
 /* Question Section Format */
@@ -64,4 +89,14 @@ typedef struct DNS_PKT {
     DNS_RECORD *additional; 
 } DNS_PKT;
 
+typedef struct Buffer {
+    uint8_t *data;   //buffer首地址
+    uint32_t length; //buffer长度
+} Buffer;
+Buffer makeBuffer(int len);//生成长度为len的buffer
+Buffer DNSPacket_encode(DNS_PKT packet);//DNS包转buffer
+void DNSPacket_destroy(DNS_PKT packet);//销毁无用DNS包，解除内存占用
+DNS_PKT DNSPacket_decode(Buffer *buffer);//buffer转DNS包
+void DNSPacket_fillQuery(DNS_PKT *packet);//填充发送包的基本属性
+void DNSPacket_print(DNS_PKT *packet);//调试输出一个DNS包的内容
 #endif

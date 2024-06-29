@@ -51,4 +51,17 @@ bool cache_search(char *name, uint32_t *ip);
 /* cache列表，使用双向链表存储 */
 CACHE_LIST cache_list;
 
+/*缓存数据的关键字*/
+typedef struct Key {
+    DNSQType qtype; //查询类型
+    char name[256]; //待查询字符串
+} Key;
+
+/*缓存的数据*/
+typedef struct MyData {
+    time_t time;          //缓存时间
+    uint32_t answerCount; //资源信息的数量
+    DNS_RECORD *answers;  //改数据项中的资源信息（例如IP地址、域名等）
+} MyData;
+
 #endif
