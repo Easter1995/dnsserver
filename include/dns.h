@@ -94,6 +94,7 @@ typedef struct Buffer {
     uint8_t *data;   //buffer首地址
     uint32_t length; //buffer长度
 } Buffer;
+
 Buffer makeBuffer(int len);//生成长度为len的buffer
 Buffer DNSPacket_encode(DNS_PKT packet);//DNS包转buffer
 void DNSPacket_destroy(DNS_PKT packet);//销毁无用DNS包，解除内存占用

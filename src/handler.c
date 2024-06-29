@@ -1,6 +1,7 @@
 #include "handler.h"
 #include "config.h"
 #include "resource.h"
+#include "list.h"
 #include <WS2tcpip.h>
 #include <WinSock2.h>
 #include <stdio.h>
@@ -69,6 +70,93 @@ void socket_init(DNS_RUNTIME *runtime) {
         exit(-1);
     }
 }
+
+/**
+ * 初始化线程池
+ */
+void initThreadPool(DNS_RUNTIME *runtime) {
+    initTaskQueue(&taskQueue);
+    for (int i = 0; i < THREAD_SIZE; i++) {
+        thread_pool[i] = CreateThread(NULL, 0, workerThread, runtime, 0, NULL);
+    }
+}
+
+/**
+ * 初始化任务队列
+ */
+void initTaskQueue(TaskQueue *queue) {
+    taskQueueNotEmptyEvent = CreateEvent(NULL, FALSE, FALSE, NULL);  // 创建事件对象
+    if (taskQueueNotEmptyEvent == NULL) {
+        perror("Error creating task queue event.");
+        exit(EXIT_FAILURE);
+    }
+
+    INIT_LIST_HEAD(&queue->head);
+    InitializeCriticalSection(&queue->mutex);
+    InitializeConditionVariable(&queue->cond);
+    queue->size = 0;
+}
+
+/**
+ * 向任务队列添加任务
+ */
+void enqueue(TaskQueue *queue, Task *task) {
+    EnterCriticalSection(&queue->mutex);
+    list_add_tail(&task->list, &queue->head);
+    queue->size++;
+    WakeConditionVariable(&queue->cond);
+    LeaveCriticalSection(&queue->mutex);
+    // 发送任务队列非空的通知
+    SetEvent(taskQueueNotEmptyEvent);
+}
+
+/**
+ * 从任务队列获取任务
+ */
+Task *dequeue(TaskQueue *queue) {
+    EnterCriticalSection(&queue->mutex);
+    while (queue->size == 0) {
+        SleepConditionVariableCS(&queue->cond, &queue->mutex, INFINITE);
+    }
+    Task *task = list_first_entry(&queue->head, Task, list);
+    list_del(&task->list);
+    queue->size--;
+    LeaveCriticalSection(&queue->mutex);
+    return task;
+}
+
+/**
+ * 销毁任务队列
+ */
+void destroyTaskQueue(TaskQueue *queue) {
+    DeleteCriticalSection(&queue->mutex);
+}
+
+/**
+ * 工作线程
+ */
+DWORD WINAPI workerThread(LPVOID arg) {
+    DNS_RUNTIME *runtime = (DNS_RUNTIME *)arg;
+    while (true) {
+        Task *task = NULL;
+        
+        // 等待任务队列非空的条件
+        WaitForSingleObject(taskQueueNotEmptyEvent, INFINITE);
+
+        // 线程被唤醒，获取任务
+        task = dequeue(&taskQueue);
+        if (task) {
+            handleClientRequest(runtime, &task->client_addr, &task->buffer);
+            free(task->buffer.data);
+            free(task);
+        }
+    }
+    return 0;
+}
+
+/**
+ * 地址是否可以存入cache
+ */
 int IsCacheable(DNSQType type){
     if (type == A || type == AAAA || type == CNAME || type == PTR || type == NS || type == TXT) {
         return 1;
@@ -104,6 +192,7 @@ DNS_PKT prepare_answerPacket(int ip)
     packet.answer=ip;
     return packet;
 }
+
 /**
  * 接收DNS包
  */
@@ -322,6 +411,7 @@ void loop(DNS_RUNTIME *runtime) {
         }
     }
 }
+
 /**
  * 初始化长度为len的buffer
  */
@@ -331,6 +421,7 @@ Buffer makeBuffer(int len) {
     buffer.length = len;
     return buffer;
 }
+
 /**
  * 实现buffer向DNS包的转换
  */
