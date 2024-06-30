@@ -624,6 +624,7 @@ void loop(DNS_RUNTIME *runtime)
         }
     }
 }
+
 /**
  * 初始化长度为len的buffer
  */
@@ -828,6 +829,8 @@ uint8_t *toQname(char *name, char *data)
         }
         else
         {
+            if(name[i]>='A'&&name[i]<='Z')//将域名中大写转小写
+                name[i]=name[i]+'a'-'A';
             length++;
             data[i + 1] = name[i];
         }
