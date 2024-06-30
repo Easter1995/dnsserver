@@ -64,7 +64,6 @@ typedef struct DNS_RECORD {
     uint32_t TTL;           // 有效时间
     uint16_t rdlength;      // rdata的长度
     char *rdata;            // 指向资源数据的指针
-    char rdataName[256];  //某些资源需要decode成字符串
 } DNS_RECORD;
 
 /* DNS的资源记录类型 */
@@ -97,8 +96,9 @@ typedef struct Buffer {
 } Buffer;
 Buffer makeBuffer(int len);//生成长度为len的buffer
 Buffer DNSPacket_encode(DNS_PKT packet);//DNS包转buffer
-void DNSPacket_destroy(DNS_PKT packet);//销毁无用DNS包，解除内存占用
 DNS_PKT DNSPacket_decode(Buffer *buffer);//buffer转DNS包
+void DNSPacket_destroy(DNS_PKT packet);//销毁无用DNS包，解除内存占用
 void DNSPacket_fillQuery(DNS_PKT *packet);//填充发送包的基本属性
 void DNSPacket_print(DNS_PKT *packet);//调试输出一个DNS包的内容
+
 #endif
