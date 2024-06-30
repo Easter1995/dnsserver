@@ -451,13 +451,15 @@ DNS_PKT prepare_answerPacket(uint32_t *ip, DNS_PKT packet, int ip_count)
     {
         packet.header->Rcode = 0;
         packet.header->QR = QRRESPONSE;
-        packet.header->ANCOUNT = 1;
+        packet.header->ANCOUNT = ip_count;
         for (int i = 0; i < ip_count; i++)
         {
+            uint32_t ip_network_order = htonl(ip[i]);
+
             packet.answer[i].type = 1;
             packet.answer[i].addr_class = 1;
             packet.answer[i].rdlength = 4;
-            packet.answer[i].rdata = ip[i];
+            memcpy(packet.answer[i].rdata, &ip_network_order, sizeof(ip_network_order));
         }   
     }
     return packet;
@@ -521,8 +523,17 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
     /*将接收到的上游应答 发送回客户端*/
     if (runtime->config.debug)
     {
-        char clientIp[16];
-        inet_ntop(AF_INET, &client.addr.sin_addr, clientIp, sizeof(clientIp));
+        char clientIp[16]; // Assuming IPv4 address can fit in 16 bytes (xxx.xxx.xxx.xxx\0)
+        int clientIpLen = sizeof(clientIp);
+        if (WSAAddressToStringA((LPSOCKADDR)&client.addr, sizeof(client.addr), NULL, clientIp, &clientIpLen) != 0)
+        {
+            printf("ERROR: WSAAddressToStringA failed\n");
+            closesocket(runtime->server);
+            closesocket(runtime->client);
+            WSACleanup();
+            exit(-1);
+        }
+
         printf("C<< Send packet back to client %s:%d\n", clientIp, ntohs(client.addr.sin_port));
         DNSPacket_print(&packet);
         runtime->totalCount++;
@@ -542,9 +553,9 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
     }
     /*判断是否应该缓存*/
     int shouldCache = 1;
-    if (packet.header->Rcode != OK || !checkCacheable(packet.question->Qtype) || packet.header->ANCOUNT < 1)
+    if (packet.header->Rcode != OK || packet.question->Qtype != A || packet.header->ANCOUNT < 1)
     {
-        shouldCache = 0; // 若在查询中指定域名不存在，或不可checkCache，或上游服务器应答中answer数量<1，则不缓存
+        shouldCache = 0; // 若在查询中指定域名不存在，或不是IPv4，或上游服务器应答中answer数量<1，则不缓存
     }
     if (shouldCache)
     {
@@ -778,8 +789,6 @@ Buffer DNSPacket_encode(DNS_PKT packet)
  */
 uint32_t *getURL(char *name_ptr, char *res)
 {
-    assert(name_ptr); // 确认传入的指针不为空
-    assert(res);
     int len = strlen(name_ptr); // 计算该域名的长度
     int idx = 0;                // 在dns包内域名字符下标
     int bias = name_ptr[0];     // 决定接下来复制字符数量

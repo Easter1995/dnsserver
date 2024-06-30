@@ -43,6 +43,8 @@ void trie_insert(char *domain, uint32_t ip)
  */
 int get_char_index(char c)
 {
+    if (c >= 'A' && c <= 'Z')
+        c = c + 'a' - 'A';
     if (c >= 'a' && c <= 'z')
         return c - 'a';
     else if (c >= '0' && c <= '9')
