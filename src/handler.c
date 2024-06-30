@@ -186,15 +186,35 @@ unsigned __stdcall worker_thread(void* arg) {
  */
 void HandleFromClient(DNS_RUNTIME* runtime) {
     Buffer buffer = makeBuffer(DNS_PACKET_SIZE);  // 创建缓冲区
-    struct sockaddr_in client_Addr;
-    int status = 0;
-    DNS_PKT dnspacket = recvPacket(runtime, runtime->server, &buffer, &client_Addr, &status);  // 接收数据包
-    if (status <= 0) {
-        free(buffer.data);
-        return;
-    }
+    struct sockaddr_in client_Addr; // 存储客户端的地址信息(IP + port)
+    int status = 0; // 存储接收数据包的状态
 
-    enqueue_request(&thread_pool.request_queue, client_Addr, buffer);  // 将请求放入队列
+    // 设置文件描述符集
+    // 当服务器套接字接收到客户端的连接请求或数据时，操作系统会将该套接字标记为“可读”，这意味着有数据可以读取
+    fd_set read_fds;
+    FD_ZERO(&read_fds);
+    FD_SET(runtime->server, &read_fds);
+
+    struct timeval timeout;
+    timeout.tv_sec = 5;  // 设置超时时间，单位为秒
+    timeout.tv_usec = 0;
+
+    // 监视文件描述符集合中的文件描述符是否发生了 I/O 事件
+    int activity = select(runtime->server + 1, &read_fds, NULL, NULL, &timeout);
+
+    // 有事件发生，接受包并且往请求队列添加任务
+    if (activity > 0 && FD_ISSET(runtime->server, &read_fds)) {
+        DNS_PKT dnspacket = recvPacket(runtime, runtime->server, &buffer, &client_Addr, &status);  // 接收数据包
+        if (status <= 0) {
+            free(buffer.data);
+            return;
+        }
+
+        enqueue_request(&thread_pool.request_queue, client_Addr, buffer);  // 将请求放入队列
+    } else {
+        // 没有活动或者select超时
+        free(buffer.data);
+    }
 }
 
 /**
