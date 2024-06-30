@@ -528,7 +528,7 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
         free(buffer.data);
         return;
     }
-    IdMap client = getIdMap(runtime->idmap, packet.header->ID); // 这步是？
+    IdMap client = getIdMap(runtime->idmap, packet.header->ID); 
     packet.header->ID = client.originalId;                      // 还原id
     /*将接收到的上游应答 发送回客户端*/
     if (runtime->config.debug)
@@ -560,53 +560,22 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
     }
     if (shouldCache)
     {
-        // 进缓存
-        Key cacheKey;
-        cacheKey.qtype = packet.question->Qtype;
-        strcpy_s(cacheKey.name, 256, packet.question->name); // 为什么不用strcpy？// 把上游响应的域名设为Cache关键字
-        MyData cacheItem;
-        cacheItem.time = time(NULL);
-        cacheItem.answerCount = packet.header->ANCOUNT;
-        cacheItem.answers = (DNS_RECORD *)malloc(sizeof(DNS_RECORD) * packet.header->ANCOUNT);
-        /*准备缓存项*/
-        for (uint16_t i = 0; i < packet.header->ANCOUNT; i++)
-        {
-            DNS_RECORD *newRecord = &cacheItem.answers[i];
-            DNS_RECORD *old = &packet.answer[i];
-            newRecord->TTL = old->TTL;
-            newRecord->type = old->type;
-            newRecord->addr_class = old->addr_class;
-            strcpy_s(newRecord->name, 256, old->name);
-            if (strlen(old->name))
-            {
-                newRecord->rdata = (char *)malloc(sizeof(char) * 256);
-                strcpy_s(newRecord->name, 256, old->name);
-                toQname(old->name, newRecord->rdata);
-                newRecord->rdlength = (uint16_t)strnlen_s(newRecord->rdata, 256) + 1;
-            }
-            else
-            {
-                newRecord->rdlength = old->rdlength;
-                newRecord->rdata = (char *)malloc(sizeof(char) * newRecord->rdlength);
-                memcpy(newRecord->rdata, old->rdata, newRecord->rdlength);
-                newRecord->name[0] = '\0';
+        // 逐个缓存条目
+        for (uint16_t i = 0; i < packet.header->ANCOUNT; i++) {
+            if(packet.answer[i].type == A) { // 如果回答的类型是ipv4地址
+                cache_add_one(packet.answer[i].name, *packet.answer[i].rdata, packet.answer[i].TTL); // 向cache中存储该条域名-ip数据
             }
         }
-        // lRUCachePut(runtime->Cache, cacheKey, cacheItem); //写入缓存
-        writeCache(runtime->config.cachefile, runtime); // 保存cache文件
         if (runtime->config.debug)
         {
             printf("ADDED TO CACHE\n");
         }
     }
-    if (runtime->config.debug)
-    {
-        // printf("CACHE SIZE %d\n", runtime->Cache->size);
-    }
     // 用完销毁
     free(buffer.data);
     DNSPacket_destroy(packet);
 }
+
 
 /**
  * 循环处理用户请求
