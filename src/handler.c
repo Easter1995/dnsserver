@@ -72,6 +72,8 @@ void socket_init(DNS_RUNTIME *runtime)
         exit(-1);
     }
     runtime->upstream_addr.sin_addr = sa.sin_addr;
+
+    printf("Accepting connections ...\n");
 }
 
 /**
@@ -89,15 +91,18 @@ unsigned __stdcall worker_thread(void *arg)
         HANDLE events[] = {thread_pool.cond, thread_pool.shutdown_event};
         DWORD wait_result = WaitForMultipleObjects(2, events, FALSE, INFINITE);
 
+        printf("worker_thread start\n");
+
         if (wait_result == WAIT_OBJECT_0 + 1)
         {
             // 第二个句柄触发，收到关闭事件，退出线程
             return 0;
         }
 
-        Request *request = dequeue_request(&thread_pool.request_queue); // 获取请求
+        Request *request = dequeue_task(&thread_pool.request_queue); // 获取请求
         if (request)
         {
+            printf("request received\n");
             struct sockaddr_in client_Addr = request->client_addr; // 获取客户端地址
             Buffer buffer = request->buffer;                       // 获取数据缓冲区
             DNS_PKT dnspacket = request->dns_packet;               // 获取接收到的dns包
@@ -213,7 +218,7 @@ void HandleFromClient(DNS_RUNTIME *runtime)
         return;
     }
 
-    enqueue_request(&thread_pool.request_queue, client_Addr, dnspacket, buffer); // 将请求放入队列
+    enqueue_task(client_Addr, dnspacket, buffer); // 将请求放入队列
 }
 
 /**
@@ -222,6 +227,7 @@ void HandleFromClient(DNS_RUNTIME *runtime)
 DNS_PKT init_DNSpacket()
 {
     DNS_PKT packet;
+    packet.header=(DNS_HEADER*)malloc(sizeof(DNS_HEADER));
     packet.answer = NULL;
     packet.question = NULL;
     packet.additional = NULL;
@@ -472,18 +478,17 @@ DNS_PKT recvPacket(DNS_RUNTIME *runtime, SOCKET socket, Buffer *buffer, struct s
 {
     int client_AddrLength = sizeof(*client_Addr);
     int recvBytes = recvfrom(socket, (char *)buffer->data, buffer->length, 0, (struct sockaddr *)client_Addr, &client_AddrLength);
-    DNS_PKT packet;
+    DNS_PKT packet = init_DNSpacket();
     if (recvBytes == SOCKET_ERROR)
     { // 若接收包过程出现异常
         printf("recvfrom failed:%d\n", WSAGetLastError());
         *error = -1; // 指示DNS包接收状态为故障
-        packet = init_DNSpacket();
     }
     else
     {                               // 正常接受包
         buffer->length = recvBytes; // 更新buffer长度字段
         *error = recvBytes;         // 给函数调用者的标识
-        packet = DNSPacket_decode(buffer);
+        DNSPacket_decode(buffer, &packet);
         if (buffer->length == 0)
         {
             *error = -2; // 指示接收包为空包
@@ -610,16 +615,16 @@ void loop(DNS_RUNTIME *runtime)
             {
                 printf("Timeout occurred!\n");
             }
-            else
-            {
-                if (FD_ISSET(runtime->server, &readfds))
-                { // 接受请求的socket可读，进行处理
-                    HandleFromClient(runtime);
-                }
-                if (FD_ISSET(runtime->client, &readfds))
-                { // 与上级连接的socket可读,进行处理
-                    HandleFromUpstream(runtime);
-                }
+        }
+        else
+        {
+            if (FD_ISSET(runtime->server, &readfds))
+            { // 接受请求的socket可读，进行处理
+                HandleFromClient(runtime);
+            }
+            if (FD_ISSET(runtime->client, &readfds))
+            { // 与上级连接的socket可读,进行处理
+                HandleFromUpstream(runtime);
             }
         }
     }
@@ -639,83 +644,84 @@ Buffer makeBuffer(int len)
 /**
  * 实现buffer向DNS包的转换
  */
-DNS_PKT DNSPacket_decode(Buffer *buffer)
+void DNSPacket_decode(Buffer *buffer, DNS_PKT *packet)
 {
-    DNS_PKT packet;
     uint8_t *Rdata_ptr = buffer->data;
     uint8_t tmp8;
     /*Transaction ID*/
-    Rdata_ptr = _read16(Rdata_ptr, &packet.header->ID); // 一次读16位
+    Rdata_ptr = _read16(Rdata_ptr, &packet->header->ID); // 一次读16位
     /* QR+OP+AA+TC+RD */
     Rdata_ptr = _read8(Rdata_ptr, &tmp8); // 一次读8位
-    packet.header->QR = (DNSPacketQR)(tmp8 >> 7 & 0x01);
-    packet.header->Opcode = (DNSPacketOP)(tmp8 >> 3 & 0x0F);
-    packet.header->AA = tmp8 >> 2 & 0x01;
-    packet.header->TC = tmp8 >> 1 & 0x01;
-    packet.header->RD = tmp8 >> 0 & 0x01;
+    packet->header->QR = (DNSPacketQR)(tmp8 >> 7 & 0x01);
+    packet->header->Opcode = (DNSPacketOP)(tmp8 >> 3 & 0x0F);
+    packet->header->AA = tmp8 >> 2 & 0x01;
+    packet->header->TC = tmp8 >> 1 & 0x01;
+    packet->header->RD = tmp8 >> 0 & 0x01;
     /* RA+padding(3)+RCODE */
     Rdata_ptr = _read8(Rdata_ptr, &tmp8);
-    packet.header->RA = tmp8 >> 7 & 0x01;
-    packet.header->Rcode = (DNSPacketRC)(tmp8 & 0xF);
+    packet->header->RA = tmp8 >> 7 & 0x01;
+    packet->header->Rcode = (DNSPacketRC)(tmp8 & 0xF);
     /* Counts */
-    Rdata_ptr = _read16(Rdata_ptr, &packet.header->QDCOUNT);
-    Rdata_ptr = _read16(Rdata_ptr, &packet.header->ANCOUNT);
-    Rdata_ptr = _read16(Rdata_ptr, &packet.header->NSCOUNT);
-    Rdata_ptr = _read16(Rdata_ptr, &packet.header->ARCOUNT);
+    Rdata_ptr = _read16(Rdata_ptr, &packet->header->QDCOUNT);
+    Rdata_ptr = _read16(Rdata_ptr, &packet->header->ANCOUNT);
+    Rdata_ptr = _read16(Rdata_ptr, &packet->header->NSCOUNT);
+    Rdata_ptr = _read16(Rdata_ptr, &packet->header->ARCOUNT);
     if (Rdata_ptr > buffer->data + buffer->length)
     {
         buffer->length = 0;
         return packet;
     }
     /* Questions */
-    packet.question = (DNS_QUESTION *)malloc(sizeof(DNS_QUESTION) * packet.header->QDCOUNT);
-    size_t i;
-    if (packet.header->QDCOUNT != 1) // 问题数量大于1
-    {
-        buffer->length = 0;
-        packet = init_DNSpacket();
-        return packet; // 返回一个空包
-    }
-    packet.question[0].name[0] = (char *)malloc((strlen(Rdata_ptr)) * sizeof(char));
-    Rdata_ptr = getURL(Rdata_ptr, packet.question[0].name);
-    packet.question[0].Qtype = (uint16_t)(Rdata_ptr[0] << 8) + Rdata_ptr[1];
-    packet.question[0].Qclass = (uint16_t)(Rdata_ptr[2] << 8) + Rdata_ptr[3];
-    Rdata_ptr += 4;
-    /* Answers */
-    if (packet.header > 0)
-    {
-        packet.answer = (DNS_RECORD *)malloc(sizeof(DNS_RECORD) * packet.header->ANCOUNT); // 根据头部记录answer的数量来malloc指定空间
-        /*Name*/
-        for (int i = 0; i < packet.header->ANCOUNT; i++)
+    if (packet->header->QDCOUNT > 0) {
+        packet->question = (DNS_QUESTION *)malloc(sizeof(DNS_QUESTION) * packet->header->QDCOUNT);
+        size_t i;
+        if (packet->header->QDCOUNT != 1) // 问题数量大于1
         {
-            Rdata_ptr = getURL(Rdata_ptr, packet.answer[i].name);
+            buffer->length = 0;
+            *packet = init_DNSpacket();
+            return;
+        }
+        packet->question[0].name[0] = (char *)malloc((strlen(Rdata_ptr)) * sizeof(char));
+        Rdata_ptr = getURL(Rdata_ptr, packet->question[0].name);
+        packet->question[0].Qtype = (uint16_t)(Rdata_ptr[0] << 8) + Rdata_ptr[1];
+        packet->question[0].Qclass = (uint16_t)(Rdata_ptr[2] << 8) + Rdata_ptr[3];
+        Rdata_ptr += 4;
+    }
+    /* Answers */
+    if (packet->header->ANCOUNT>0)
+    {
+        packet->answer = (DNS_RECORD *)malloc(sizeof(DNS_RECORD) * packet->header->ANCOUNT); // 根据头部记录answer的数量来malloc指定空间
+        /*Name*/
+        for (int i = 0; i < packet->header->ANCOUNT; i++)
+        {
+            Rdata_ptr = getURL(Rdata_ptr, packet->answer[i].name);
             /*Type*/
             uint16_t tmp;
             Rdata_ptr = _read16(Rdata_ptr, &tmp);
-            packet.answer->type = (DNSQType)tmp;
+            packet->answer->type = (DNSQType)tmp;
             /*Class*/
             Rdata_ptr = _read16(Rdata_ptr, &tmp);
-            packet.answer[i].addr_class = (uint16_t)tmp;
+            packet->answer[i].addr_class = (uint16_t)tmp;
             /*Time to live*/
-            Rdata_ptr = _read32(Rdata_ptr, &packet.answer[i].TTL);
+            Rdata_ptr = _read32(Rdata_ptr, &packet->answer[i].TTL);
             /*Data length*/
-            Rdata_ptr = _read16(Rdata_ptr, &packet.answer[i].rdlength);
+            Rdata_ptr = _read16(Rdata_ptr, &packet->answer[i].rdlength);
             /*data*/
-            packet.answer[i].rdata = (char *)malloc(sizeof(char) * packet.answer->rdlength);
-            memcpy(packet.answer->rdata, Rdata_ptr, packet.answer->rdlength);
-            Rdata_ptr += packet.answer->rdlength;
+            packet->answer[i].rdata = (char *)malloc(sizeof(char) * packet->answer->rdlength);
+            memcpy(packet->answer->rdata, Rdata_ptr, packet->answer->rdlength);
+            Rdata_ptr += packet->answer->rdlength;
 
             if (Rdata_ptr > buffer->data + buffer->length + 1) // 指针越界
             {
                 buffer->length = 0;
-                packet = init_DNSpacket();
-                return packet; // 返回一个空包
+                *packet = init_DNSpacket();
+                return; // 返回一个空包
             }
         }
     }
     else
     {
-        packet.answer = NULL;
+        packet->answer = NULL;
     }
 }
 
