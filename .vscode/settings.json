@@ -19,6 +19,8 @@
         "list.h": "c",
         "trie.h": "c",
         "stdlib.h": "c",
-        "handler.h": "c"
+        "handler.h": "c",
+        "thread.h": "c",
+        "memory": "c"
     }
 }

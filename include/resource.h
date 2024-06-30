@@ -12,6 +12,7 @@
 
 #define MAX_TABLE_LEN 1024
 #define MAX_CACHE_LEN 1024
+
 /* 拦截列表，使用字典树存储 */
 #define block_table trie
 
@@ -22,6 +23,7 @@ typedef struct BLOCK_TABLE {
   uint32_t ipv4; // IP
   char* name;    // 域名
 } BLOCK_TABLE;
+
 /**
  * cache列表
  */
@@ -30,6 +32,7 @@ typedef struct CACHE_LIST {
   int list_size;
   HANDLE lock; // 互斥量句柄
 } CACHE_LIST;
+
 /**
  * cache条目
  */
@@ -44,16 +47,22 @@ typedef struct CACHE_ENTRY {
 
 /* 点分十进制IPv4字符串转换为32位无符号数 */
 uint32_t ip_to_u32(char ip[IPv4_LEN]);
+
 /* 初始化拦截表 */
 void block_table_init();
+
 /* 初始化cache */
 void cache_init();
+
 /* 添加cache */
 void cache_add_one(char *name, uint32_t ip, uint32_t ttl);
+
 /* 查找cache */
 bool cache_search(char *name, uint32_t *ip);
+
 /* 获取cache_list的互斥量句柄 */
 HANDLE get_cache_lock();
+
 /* cache列表，使用双向链表存储 */
 CACHE_LIST cache_list;
 

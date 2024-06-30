@@ -1,7 +1,7 @@
 /* 配置和管理 DNS 中继服务器的运行时信息和服务器配置 */
+/* 程序的初始化动作 */
 #ifndef CONFIG_H
 #define CONFIG_H
-#define CACHE_SIZE 1024
 #define IDMAP_TIMEOUT 5
 #define MAXID 65535
 #include "list.h"
@@ -19,6 +19,7 @@ typedef struct DNS_CONFIG {
     char hostfile[256];          //HOST文件的文件名
     char cachefile[256];
 } DNS_CONFIG;
+
 /* 程序运行时 */
 typedef struct DNS_RUNTIME {
     DNS_CONFIG config;                // 服务器配置
@@ -33,6 +34,7 @@ typedef struct DNS_RUNTIME {
 } DNS_RUNTIME;
 /* 初始化配置 */
 DNS_CONFIG config_init(int argc, char *argv[]);
+
 /* 初始化运行时 */
 DNS_RUNTIME runtime_init(DNS_CONFIG *config);
 
@@ -41,7 +43,11 @@ typedef struct idMap {
     uint16_t originalId;     //请求方ID
     struct sockaddr_in addr; //请求方IP+端口
 } IdMap;
+
 IdMap *initIdMap();
+
 IdMap getIdMap(IdMap *idMap, uint16_t i);
-int setIdMap(IdMap *idMap, IdMap item, uint16_t curMaxId);
+
+uint16_t setIdMap(IdMap *idMap, IdMap item, uint16_t curMaxId);
+
 #endif
