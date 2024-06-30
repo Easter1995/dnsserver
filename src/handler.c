@@ -101,102 +101,102 @@ unsigned __stdcall worker_thread(void *arg)
         Request *request = dequeue_request(&thread_pool.request_queue); // 获取请求
         if (request)
         {
-            struct sockaddr_in client_addr = request->client_addr; // 获取客户端地址
+            struct sockaddr_in client_Addr = request->client_addr; // 获取客户端地址
             Buffer buffer = request->buffer;                       // 获取数据缓冲区
+            DNS_PKT dnspacket = request->dns_packet;               // 获取接收到的dns包
 
             // 处理请求的逻辑
-            int status = 0;
-            DNS_PKT dnspacket = DNSPacket_decode(&buffer); // 解码DNS包
-            if (buffer.length <= 0)
-            {
-                free(buffer.data);
-                free(request);
-                continue;
+            if (dnspacket.header->QR != QRQUERY || dnspacket.header->QDCOUNT != 1)
+            {                                 // 若dnspacket不是一个查询类型的 DNS 报文或者其问题字段不是一个问题
+                DNSPacket_destroy(dnspacket); // 销毁packet，解除内存占用
+                return;
             }
-
-            if (dnspacket.header->QR != QRQUERY || dnspacket.header->QDCOUNT < 1)
-            {
-                DNSPacket_destroy(dnspacket);
-                free(buffer.data);
-                free(request);
-                continue;
-            }
-
-            if (dnspacket.header->QDCOUNT > 1)
-            {
-                if (runtime->config.debug)
-                {
-                    printf("Too many questions. \n");
-                }
-                dnspacket.header->QR = QRRESPONSE;
-                dnspacket.header->Rcode = FORMERR;
-                buffer = DNSPacket_encode(dnspacket);
-                DNSPacket_destroy(dnspacket);
-                sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_addr, sizeof(client_addr));
-                free(buffer.data);
-                free(request);
-                continue;
-            }
-
-            if (IsCacheable(dnspacket.question->Qtype))
-            {
+            if (dnspacket.question->Qtype == 1)
+            { // 只有当请求的资源类型为ipv4时，服务器做出回应
                 uint32_t target_ip;
-                bool find_result = cache_search(dnspacket.question->name, &target_ip);
-                if (find_result)
+                // 拦截不良网站
+                if (trie_search(dnspacket.question->name, &target_ip))
                 {
-                    if (runtime->config.debug)
-                    {
-                        printf("Cache Hint! Expected ip is %d", target_ip);
-                    }
                     DNS_PKT answer_Packet = prepare_answerPacket(target_ip, dnspacket);
                     if (runtime->config.debug)
-                    {
-                        printf("Send packet back to client %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+                    { // 输出调试信息
+                        printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
                         DNSPacket_print(&answer_Packet);
                         runtime->totalCount++;
+                        printf("Domain name blocked!\n");
                         printf("TOTAL COUNT %d\n", runtime->totalCount);
-                        printf("CACHE SIZE %d\n", cache_list.list_size);
                     }
                     answer_Packet.header->RA = 1;
-                    buffer = DNSPacket_encode(answer_Packet);
+                    buffer = DNSPacket_encode(answer_Packet); // 将DNS包转换为buffer，方便发送
                     DNSPacket_destroy(answer_Packet);
-                    int sendBytes = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_addr, sizeof(client_addr));
-                    free(buffer.data);
-                    free(request);
+                    int sendBytes = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_Addr, sizeof(sizeof(client_Addr))); // 由服务器发给客户端找到的ip信息
+                    free(buffer.data);                                                                                                                            // 数据发送完后释放缓存
                     if (sendBytes == SOCKET_ERROR)
                     {
                         printf("sendto failed: %d\n", WSAGetLastError());
                         WSACleanup();
                     }
                     else
-                    {
                         printf("Sent %d bytes to server.\n", sendBytes);
+                    return;
+                }
+                // 先在本地cache中搜索
+                if (IsCacheable(dnspacket.question->Qtype))
+                {
+                    bool find_result = cache_search(dnspacket.question->name, &target_ip);
+                    if (find_result)
+                    { // 若在cache中查询到了结果
+                        if (runtime->config.debug)
+                        { // 打印debug信息
+                            printf("Cache Hint! Expected ip is %d", target_ip);
+                        }
+                        DNS_PKT answer_Packet = prepare_answerPacket(target_ip, dnspacket);
+                        if (runtime->config.debug)
+                        { // 输出调试信息
+                            printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
+                            DNSPacket_print(&answer_Packet);
+                            runtime->totalCount++;
+                            printf("TOTAL COUNT %d\n", runtime->totalCount);
+                            printf("CACHE SIZE %d\n", cache_list.list_size);
+                        }
+                        answer_Packet.header->RA = 1;
+                        buffer = DNSPacket_encode(answer_Packet); // 将DNS包转换为buffer，方便发送
+                        DNSPacket_destroy(answer_Packet);
+                        int sendBytes = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_Addr, sizeof(sizeof(client_Addr))); // 由服务器发给客户端找到的ip信息
+                        free(buffer.data);                                                                                                                            // 数据发送完后释放缓存
+                        if (sendBytes == SOCKET_ERROR)
+                        {
+                            printf("sendto failed: %d\n", WSAGetLastError());
+                            WSACleanup();
+                        }
+                        else
+                            printf("Sent %d bytes to server.\n", sendBytes);
+                        return;
                     }
-                    continue;
+                }
+                /*若cache未命中，则需要向上级发送包进一步查询*/
+                IdMap mapItem;                             // 声明一个ID转换表
+                mapItem.addr = request->client_addr;       // 请求方的地址
+                mapItem.originalId = dnspacket.header->ID; // 请求方的ID
+                mapItem.time = time(NULL) + IDMAP_TIMEOUT; // 设置该记录的过期时间
+                runtime->maxId = setIdMap(runtime->idmap, mapItem, runtime->maxId);
+                dnspacket.header->ID = runtime->maxId;
+                // 发走
+                if (runtime->config.debug)
+                {
+                    printf("Send packet to upstream\n");
+                    DNSPacket_print(&dnspacket);
+                }
+                buffer = DNSPacket_encode(dnspacket);
+                DNSPacket_destroy(dnspacket);
+                int status = sendto(runtime->client, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&runtime->upstream_addr, sizeof(runtime->upstream_addr));
+                free(buffer.data);
+                if (status < 0)
+                {
+                    printf("Error sendto: %d\n", WSAGetLastError());
                 }
             }
 
-            /* 如果cache未命中，则向上级服务器查询 */
-            IdMap mapItem;                                                      // 创建一个新idMap项，用于设置向上级服务器查询的会话id
-            mapItem.addr = client_addr;                                         // 设置该次会话id项对应的客户端地址
-            mapItem.originalId = dnspacket.header->ID;                          // 设置该次会话id项对应的 请求方客户端发来的DNS报文的会话id
-            mapItem.time = time(NULL) + IDMAP_TIMEOUT;                          // 设置该次会话id的过期时间
-            runtime->maxId = setIdMap(runtime->idmap, mapItem, runtime->maxId); // 分配id号
-            dnspacket.header->ID = runtime->maxId;                              // 将setIdMap寻找到的空闲id设为本次向上游服务器发出请求的id
-            runtime->maxId = (runtime->maxId + 1) % UINT16_MAX;                 //???
-            buffer = DNSPacket_encode(dnspacket);
-            DNSPacket_destroy(dnspacket);
-            struct sockaddr_in upstreamAddr = runtime->upstream_addr;
-            int sendBytes = sendto(runtime->client, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&upstreamAddr, sizeof(upstreamAddr));
-            if (sendBytes == SOCKET_ERROR)
-            {
-                printf("sendto failed: %d\n", WSAGetLastError());
-                WSACleanup();
-            }
-            else
-            {
-                printf("Sent %d bytes to upstream server.\n", sendBytes);
-            }
             free(buffer.data);
             free(request);
         }
@@ -215,36 +215,14 @@ void HandleFromClient(DNS_RUNTIME *runtime)
     struct sockaddr_in client_Addr;              // 存储客户端的地址信息(IP + port)
     int status = 0;                              // 存储接收数据包的状态
 
-    // 设置文件描述符集
-    // 当服务器套接字接收到客户端的连接请求或数据时，操作系统会将该套接字标记为“可读”，这意味着有数据可以读取
-    fd_set read_fds;
-    FD_ZERO(&read_fds);
-    FD_SET(runtime->server, &read_fds);
-
-    struct timeval timeout;
-    timeout.tv_sec = 5; // 设置超时时间，单位为秒
-    timeout.tv_usec = 0;
-
-    // 监视文件描述符集合中的文件描述符是否发生了 I/O 事件，即socket是否有数据可读
-    int activity = select(runtime->server + 1, &read_fds, NULL, NULL, &timeout);
-
-    // 有事件发生，接受包并且往请求队列添加任务
-    if (activity > 0 && FD_ISSET(runtime->server, &read_fds))
+    DNS_PKT dnspacket = recvPacket(runtime, runtime->server, &buffer, &client_Addr, &status); // 接收数据包
+    if (status <= 0)
     {
-        DNS_PKT dnspacket = recvPacket(runtime, runtime->server, &buffer, &client_Addr, &status); // 接收数据包
-        if (status <= 0)
-        {
-            free(buffer.data);
-            return;
-        }
-
-        enqueue_request(&thread_pool.request_queue, client_Addr, buffer); // 将请求放入队列
-    }
-    else
-    {
-        // 没有活动或者select超时
         free(buffer.data);
+        return;
     }
+
+    enqueue_request(&thread_pool.request_queue, client_Addr, dnspacket, buffer); // 将请求放入队列
 }
 
 /**
@@ -532,112 +510,6 @@ DNS_PKT recvPacket(DNS_RUNTIME *runtime, SOCKET socket, Buffer *buffer, struct s
 }
 
 /**
- * 处理客户端请求
- */
-void HandleFromClient(DNS_RUNTIME *runtime)
-{
-    Buffer buffer = makeBuffer(DNS_PACKET_SIZE);
-    struct sockaddr_in client_Addr;
-    int status = 0; // 指示DNS包接收状态
-    DNS_PKT dnspacket = recvPacket(runtime, runtime->server, &buffer, &client_Addr, &status);
-    if (status <= 0)
-    { // 接受失败或者为空包
-        return;
-    }
-    free(buffer.data); // 释放缓存
-    if (dnspacket.header->QR != QRQUERY || dnspacket.header->QDCOUNT != 1)
-    {                                 // 若dnspacket不是一个查询类型的 DNS 报文或者其问题字段不是一个问题
-        DNSPacket_destroy(dnspacket); // 销毁packet，解除内存占用
-        return;
-    }
-    if (dnspacket.question->Qtype == 1)
-    { // 只有当请求的资源类型为ipv4时，服务器做出回应
-        uint32_t target_ip;
-        // 拦截不良网站
-        if (trie_search(dnspacket.question->name, &target_ip))
-        {
-            DNS_PKT answer_Packet = prepare_answerPacket(target_ip, dnspacket);
-            if (runtime->config.debug)
-            { // 输出调试信息
-                printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
-                DNSPacket_print(&answer_Packet);
-                runtime->totalCount++;
-                printf("Domain name blocked!\n");
-                printf("TOTAL COUNT %d\n", runtime->totalCount);
-            }
-            answer_Packet.header->RA = 1;
-            buffer = DNSPacket_encode(answer_Packet); // 将DNS包转换为buffer，方便发送
-            DNSPacket_destroy(answer_Packet);
-            int sendBytes = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_Addr, sizeof(sizeof(client_Addr))); // 由服务器发给客户端找到的ip信息
-            free(buffer.data);                                                                                                                            // 数据发送完后释放缓存
-            if (sendBytes == SOCKET_ERROR)
-            {
-                printf("sendto failed: %d\n", WSAGetLastError());
-                WSACleanup();
-            }
-            else
-                printf("Sent %d bytes to server.\n", sendBytes);
-            return;
-        }
-        // 先在本地cache中搜索
-        if (IsCacheable(dnspacket.question->Qtype))
-        {
-            bool find_result = cache_search(dnspacket.question->name, &target_ip);
-            if (find_result)
-            { // 若在cache中查询到了结果
-                if (runtime->config.debug)
-                { // 打印debug信息
-                    printf("Cache Hint! Expected ip is %d", target_ip);
-                }
-                DNS_PKT answer_Packet = prepare_answerPacket(target_ip, dnspacket);
-                if (runtime->config.debug)
-                { // 输出调试信息
-                    printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
-                    DNSPacket_print(&answer_Packet);
-                    runtime->totalCount++;
-                    printf("TOTAL COUNT %d\n", runtime->totalCount);
-                    printf("CACHE SIZE %d\n", cache_list.list_size);
-                }
-                answer_Packet.header->RA = 1;
-                buffer = DNSPacket_encode(answer_Packet); // 将DNS包转换为buffer，方便发送
-                DNSPacket_destroy(answer_Packet);
-                int sendBytes = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_Addr, sizeof(sizeof(client_Addr))); // 由服务器发给客户端找到的ip信息
-                free(buffer.data);                                                                                                                            // 数据发送完后释放缓存
-                if (sendBytes == SOCKET_ERROR)
-                {
-                    printf("sendto failed: %d\n", WSAGetLastError());
-                    WSACleanup();
-                }
-                else
-                    printf("Sent %d bytes to server.\n", sendBytes);
-                return;
-            }
-        }
-        /*若cache未命中，则需要向上级发送包进一步查询*/
-        IdMap mapItem;                             // 声明一个ID转换表
-        mapItem.addr = client_Addr;                // 请求方的地址
-        mapItem.originalId = dnspacket.header->ID; // 请求方的ID
-        mapItem.time = time(NULL) + IDMAP_TIMEOUT; // 设置该记录的过期时间
-        runtime->maxId = setIdMap(runtime->idmap, mapItem, runtime->maxId);
-        dnspacket.header->ID = runtime->maxId;
-        // 发走
-        if (runtime->config.debug)
-        {
-            printf("Send packet to upstream\n");
-            DNSPacket_print(&dnspacket);
-        }
-        buffer = DNSPacket_encode(dnspacket);
-        DNSPacket_destroy(dnspacket);
-        status = sendto(runtime->client, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&runtime->upstream_addr, sizeof(runtime->upstream_addr));
-        free(buffer.data);
-        if (status < 0)
-        {
-            printf("Error sendto: %d\n", WSAGetLastError());
-        }
-    }
-}
-
-/**
  * 处理上游应答
  */
 void HandleFromUpstream(DNS_RUNTIME *runtime)
@@ -745,7 +617,6 @@ void loop(DNS_RUNTIME *runtime)
         FD_SET(runtime->client, &readfds); // 添加 client 到 readfds 中
         struct timeval tv;
         tv.tv_sec = 5; // 设置超时时间为 5 秒
-        tv.tv_sec = 5;
         tv.tv_usec = 0;
         // 检查是否有就绪的文件描述符（即有数据可读）
         int ready = select(0, &readfds, NULL, NULL, &tv);

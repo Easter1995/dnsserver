@@ -14,6 +14,7 @@ void init_thread_pool() {
 
     // 创建初始线程
     for (int i = 0; i < thread_pool.num_threads; i++) {
+        // 保存线程句柄
         thread_pool.threads[i] = (HANDLE)_beginthreadex(NULL, 0, worker_thread, NULL, 0, NULL);
     }
 }
@@ -80,8 +81,8 @@ void adjust_thread_pool() {
 /**
  * 有新任务，入队，调整线程数量
  */
-void enqueue_task(struct sockaddr_in client_addr, Buffer buffer) {
-    enqueue_request(&thread_pool.request_queue, client_addr, buffer);
+void enqueue_task(struct sockaddr_in client_addr, DNS_PKT pkt, Buffer buffer) {
+    enqueue_request(&thread_pool.request_queue, client_addr, pkt, buffer);
     adjust_thread_pool();
 }
 
@@ -107,16 +108,17 @@ void init_request_queue(RequestQueue* queue) {
 /**
  * 向任务队列添加任务
  */
-void enqueue_request(RequestQueue* queue, struct sockaddr_in client_addr, Buffer buffer) {
+void enqueue_request(RequestQueue* queue, struct sockaddr_in client_addr, DNS_PKT pkt, Buffer buffer) {
     Request* request = (Request*)malloc(sizeof(Request));  // 分配新的请求节点
     request->client_addr = client_addr;  // 设置客户端地址
     request->buffer = buffer;  // 设置数据缓冲区
+    request->dns_packet = pkt;  // 设置接收到的dns包
     INIT_LIST_HEAD(&request->list);  // 初始化链表节点
 
-    WaitForSingleObject(queue->mutex, INFINITE);  // 加锁
+    WaitForSingleObject(queue->mutex, INFINITE);  // 获取锁
     list_add_tail(&request->list, &queue->head);  // 添加到链表尾部
     SetEvent(queue->cond);  // 使用条件变量通知等待的线程
-    ReleaseMutex(queue->mutex);  // 解锁
+    ReleaseMutex(queue->mutex);  // 释放锁
 }
 
 /**

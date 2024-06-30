@@ -34,7 +34,8 @@ ThreadPool thread_pool;
  */
 typedef struct Request{
     struct list_head list;          // 链表节点
-    struct sockaddr_in client_addr; // 客户端地址(IP + port)
+    struct sockaddr_in client_addr; // 客户端地址信息
+    DNS_PKT dns_packet;             // 收到的包
     Buffer buffer;                  // 数据缓冲区
 } Request;
 
@@ -60,7 +61,7 @@ void adjust_thread_pool();
 void init_request_queue(RequestQueue* queue);
 
 /* 往任务队列添加任务 */
-void enqueue_request(RequestQueue* queue, struct sockaddr_in client_addr, Buffer buffer);
+void enqueue_request(RequestQueue* queue, struct sockaddr_in client_addr, DNS_PKT pkt, Buffer buffer);
 
 /* 从任务队列取出任务 */
 Request* dequeue_request(RequestQueue* queue);
