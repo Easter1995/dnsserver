@@ -14,22 +14,6 @@
 #define THREAD_COUNT_HIGH  8   // 高任务量
 
 /**
- * 定义线程池
- */
-typedef struct ThreadPool{
-    HANDLE threads[THREAD_COUNT_HIGH]; // 存放线程的句柄
-    int num_threads;
-    int max_threads;
-    RequestQueue request_queue;
-    HANDLE mutex;
-    HANDLE cond;
-    HANDLE shutdown_event;
-} ThreadPool;
-
-/* 线程池变量 */
-ThreadPool thread_pool;
-
-/**
  * 定义任务结构
  */
 typedef struct Request{
@@ -47,6 +31,22 @@ typedef struct {
     HANDLE mutex;          // 互斥锁
     HANDLE cond;           // 条件变量
 } RequestQueue;
+
+/**
+ * 定义线程池
+ */
+typedef struct ThreadPool{
+    HANDLE threads[THREAD_COUNT_HIGH]; // 存放线程的句柄
+    int num_threads;
+    int max_threads;
+    RequestQueue request_queue;
+    HANDLE mutex;
+    HANDLE cond;
+    HANDLE shutdown_event;
+} ThreadPool;
+
+/* 线程池变量 */
+ThreadPool thread_pool;
 
 /* 初始化线程池 */
 void init_thread_pool();

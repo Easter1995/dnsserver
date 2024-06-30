@@ -9,9 +9,11 @@
 #include <stdbool.h>
 #include <time.h>
 #include <process.h>
+#include <winsock2.h>
 #include "list.h"
 #include "dns.h"
 #include "thread.h"
+#include "config.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
