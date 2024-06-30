@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <time.h>
 #include <process.h>
+#include <assert.h>
 #include "list.h"
 #include "dns.h"
 #include "thread.h"
