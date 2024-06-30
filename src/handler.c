@@ -131,7 +131,7 @@ unsigned __stdcall worker_thread(void *arg)
                     answer_Packet.header->RA = 1;
                     buffer = DNSPacket_encode(answer_Packet); // 将DNS包转换为buffer，方便发送
                     DNSPacket_destroy(answer_Packet);
-                    int sendBytes = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_Addr, sizeof(sizeof(client_Addr))); // 由服务器发给客户端找到的ip信息
+                    int sendBytes = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_Addr, sizeof(client_Addr)); // 由服务器发给客户端找到的ip信息
                     free(buffer.data);                                                                                                                            // 数据发送完后释放缓存
                     if (sendBytes == SOCKET_ERROR)
                     {
@@ -147,7 +147,8 @@ unsigned __stdcall worker_thread(void *arg)
                 uint32_t target_ip[MAX_IP_COUNT];
                 bool find_result = cache_search(dnspacket.question->name, target_ip, &actual_ip_cnt);
                 if (find_result)
-                { // 若在cache中查询到了结果
+                { 
+                    // 若在cache中查询到了结果
                     DNS_PKT answer_Packet = prepare_answerPacket(target_ip, dnspacket, actual_ip_cnt);
                     if (runtime->config.debug)
                     { // 输出调试信息
@@ -459,24 +460,24 @@ DNS_PKT prepare_answerPacket(uint32_t *ip, DNS_PKT packet, int ip_count)
     strcpy(packet.answer->name, packet.question->name);
     if (ip[0] == 0)
     {
-        packet.header->Rcode = 3;
-        packet.answer = NULL;
+        DNS_PKT new_pkt = init_DNSpacket();
+        new_pkt.header->Rcode = 3;
+        new_pkt.header->ID = packet.header->ID;
+        new_pkt.header->QR = 1;
+        return new_pkt;
     }
-    else
+    packet.header->Rcode = 0;
+    packet.header->QR = QRRESPONSE;
+    packet.header->ANCOUNT = ip_count;
+    for (int i = 0; i < ip_count; i++)
     {
-        packet.header->Rcode = 0;
-        packet.header->QR = QRRESPONSE;
-        packet.header->ANCOUNT = ip_count;
-        for (int i = 0; i < ip_count; i++)
-        {
-            uint32_t ip_network_order = htonl(ip[i]);
+        uint32_t ip_network_order = htonl(ip[i]);
 
-            packet.answer[i].type = 1;
-            packet.answer[i].addr_class = 1;
-            packet.answer[i].rdlength = 4;
-            memcpy(packet.answer[i].rdata, &ip_network_order, sizeof(ip_network_order));
-        }   
-    }
+        packet.answer[i].type = 1;
+        packet.answer[i].addr_class = 1;
+        packet.answer[i].rdlength = 4;
+        memcpy(packet.answer[i].rdata, &ip_network_order, sizeof(ip_network_order));
+    }   
     return packet;
 }
 
@@ -822,7 +823,7 @@ Buffer DNSPacket_encode(DNS_PKT packet)
         memcpy(data, packet.additional[i].rdata, packet.additional[i].rdlength);
         data += packet.additional[i].rdlength;
     }
-    buffer.length = (uint32_t)(data - buffer.data);
+    buffer.length = (uint32_t)(data - buffer.data - 1);
     return buffer;
 }
 
