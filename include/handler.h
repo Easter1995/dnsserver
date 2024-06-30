@@ -32,6 +32,9 @@ DNS_PKT init_DNSpacket();
 /*主循环*/
 void loop(DNS_RUNTIME *runtime);
 
+/*处理上游应答*/
+void HandleFromUpstream(DNS_RUNTIME *runtime);
+
 /*创建一个缓冲区*/
 Buffer makeBuffer(int len);
 
@@ -41,6 +44,24 @@ uint32_t *getURL(char *name_ptr, char *res);
 /*点分十进制转标准形式*/
 uint8_t *toQname(char *name, char *data);
 
+/*读取数据时指针的移动*/
 uint8_t *_read32(uint8_t *ptr, uint32_t *value);
 uint8_t *_write32(uint8_t *ptr, uint32_t value);
+uint8_t *_read16(uint8_t *ptr, uint16_t *value);
+uint8_t *_write16(uint8_t *ptr, uint16_t value);
+uint8_t *_read8(uint8_t *ptr, uint8_t *value);
+uint8_t *_write8(uint8_t *ptr, uint8_t value);
+
+/*寻找空闲回话id*/
+uint16_t setIdMap(IdMap *idMap, IdMap item, uint16_t curMaxId);
+
+IdMap getIdMap(IdMap *idMap, uint16_t i);
+
+/*接受DNS包*/
+DNS_PKT recvPacket(DNS_RUNTIME *runtime, SOCKET socket, Buffer *buffer, struct sockaddr_in *client_Addr, int *error);
+
+/*生成回应包*/
+DNS_PKT prepare_answerPacket(uint32_t ip, DNS_PKT packet);
+
+
 #endif

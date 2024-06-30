@@ -141,38 +141,35 @@ unsigned __stdcall worker_thread(void *arg)
                     return 0;
                 }
                 // 先在本地cache中搜索
-                if (IsCacheable(dnspacket.question->Qtype))
-                {
-                    bool find_result = cache_search(dnspacket.question->name, &target_ip);
-                    if (find_result)
-                    { // 若在cache中查询到了结果
-                        if (runtime->config.debug)
-                        { // 打印debug信息
-                            printf("Cache Hint! Expected ip is %d", target_ip);
-                        }
-                        DNS_PKT answer_Packet = prepare_answerPacket(target_ip, dnspacket);
-                        if (runtime->config.debug)
-                        { // 输出调试信息
-                            printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
-                            DNSPacket_print(&answer_Packet);
-                            runtime->totalCount++;
-                            printf("TOTAL COUNT %d\n", runtime->totalCount);
-                            printf("CACHE SIZE %d\n", cache_list.list_size);
-                        }
-                        answer_Packet.header->RA = 1;
-                        buffer = DNSPacket_encode(answer_Packet); // 将DNS包转换为buffer，方便发送
-                        DNSPacket_destroy(answer_Packet);
-                        int sendBytes = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_Addr, sizeof(sizeof(client_Addr))); // 由服务器发给客户端找到的ip信息
-                        free(buffer.data);                                                                                                                            // 数据发送完后释放缓存
-                        if (sendBytes == SOCKET_ERROR)
-                        {
-                            printf("sendto failed: %d\n", WSAGetLastError());
-                            WSACleanup();
-                        }
-                        else
-                            printf("Sent %d bytes to server.\n", sendBytes);
-                        return 0;
+                bool find_result = cache_search(dnspacket.question->name, &target_ip);
+                if (find_result)
+                { // 若在cache中查询到了结果
+                    if (runtime->config.debug)
+                    { // 打印debug信息
+                        printf("Cache Hint! Expected ip is %d", target_ip);
                     }
+                    DNS_PKT answer_Packet = prepare_answerPacket(target_ip, dnspacket);
+                    if (runtime->config.debug)
+                    { // 输出调试信息
+                        printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
+                        DNSPacket_print(&answer_Packet);
+                        runtime->totalCount++;
+                        printf("TOTAL COUNT %d\n", runtime->totalCount);
+                        printf("CACHE SIZE %d\n", cache_list.list_size);
+                    }
+                    answer_Packet.header->RA = 1;
+                    buffer = DNSPacket_encode(answer_Packet); // 将DNS包转换为buffer，方便发送
+                    DNSPacket_destroy(answer_Packet);
+                    int sendBytes = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_Addr, sizeof(sizeof(client_Addr))); // 由服务器发给客户端找到的ip信息
+                    free(buffer.data);                                                                                                                            // 数据发送完后释放缓存
+                    if (sendBytes == SOCKET_ERROR)
+                    {
+                        printf("sendto failed: %d\n", WSAGetLastError());
+                        WSACleanup();
+                    }
+                    else
+                        printf("Sent %d bytes to server.\n", sendBytes);
+                    return 0;
                 }
                 /*若cache未命中，则需要向上级发送包进一步查询*/
                 IdMap mapItem;                             // 声明一个ID转换表
@@ -196,7 +193,6 @@ unsigned __stdcall worker_thread(void *arg)
                     printf("Error sendto: %d\n", WSAGetLastError());
                 }
             }
-
             free(buffer.data);
             free(request);
         }
@@ -226,11 +222,11 @@ void HandleFromClient(DNS_RUNTIME *runtime)
 }
 
 /**
- * 地址是否可以存入cache
+ * 地址是否为ipv4
  */
 int IsCacheable(DNSQType type)
 {
-    if (type == A || type == AAAA || type == CNAME || type == PTR || type == NS || type == TXT)
+    if (type == A)
     {
         return 1;
     }
@@ -467,7 +463,7 @@ DNS_PKT prepare_answerPacket(uint32_t ip, DNS_PKT packet)
     packet.answer->type = 1;
     packet.answer->addr_class = 1;
     packet.answer->rdlength = 4;
-    packet.answer->rdata=ip;
+    packet.answer->rdata = ip;
     return packet;
 }
 

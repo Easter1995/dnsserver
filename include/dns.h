@@ -96,6 +96,7 @@ typedef struct Buffer {
 } Buffer;
 
 Buffer makeBuffer(int len);//生成长度为len的buffer
+DNS_PKT init_DNSpacket();//初始化DNS空包
 Buffer DNSPacket_encode(DNS_PKT packet);//DNS包转buffer
 DNS_PKT DNSPacket_decode(Buffer *buffer);//buffer转DNS包
 void DNSPacket_destroy(DNS_PKT packet);//销毁无用DNS包，解除内存占用
