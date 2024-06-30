@@ -27,4 +27,18 @@ int IsCacheable(DNSQType type);
 /* 初始化一个DNS空包 */
 DNS_PKT init_DNSpacket();
 
+/*主循环*/
+void loop(DNS_RUNTIME *runtime);
+
+/*创建一个缓冲区*/
+Buffer makeBuffer(int len);
+
+/*标准形式转点分十进制*/
+uint32_t *getURL(char *name_ptr, char *res);
+
+/*点分十进制转标准形式*/
+uint8_t *toQname(char *name, char *data);
+
+uint8_t *_read32(uint8_t *ptr, uint32_t *value);
+uint8_t *_write32(uint8_t *ptr, uint32_t value);
 #endif
