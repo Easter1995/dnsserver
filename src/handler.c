@@ -6,7 +6,6 @@
 #include <WinSock2.h>
 #include <stdio.h>
 
-
 /**
  * 初始化socket
  */
@@ -72,67 +71,6 @@ void socket_init(DNS_RUNTIME *runtime) {
 }
 
 /**
- * 初始化线程池
- */
-void initThreadPool(DNS_RUNTIME *runtime) {
-    initTaskQueue(&taskQueue);
-    for (int i = 0; i < THREAD_SIZE; i++) {
-        thread_pool[i] = CreateThread(NULL, 0, workerThread, runtime, 0, NULL);
-    }
-}
-
-/**
- * 初始化任务队列
- */
-void init_request_queue(RequestQueue* queue) {
-    INIT_LIST_HEAD(&queue->head);  // 初始化链表头
-    queue->mutex = CreateMutex(NULL, FALSE, NULL);  // 创建互斥锁
-    queue->cond = CreateEvent(NULL, FALSE, FALSE, NULL);  // 创建条件变量
-}
-
-/**
- * 向任务队列添加任务
- */
-void enqueue_request(RequestQueue* queue, struct sockaddr_in client_addr, Buffer buffer) {
-    Request* request = (Request*)malloc(sizeof(Request));  // 分配新的请求节点
-    request->client_addr = client_addr;  // 设置客户端地址
-    request->buffer = buffer;  // 设置数据缓冲区
-    INIT_LIST_HEAD(&request->list);  // 初始化链表节点
-
-    WaitForSingleObject(queue->mutex, INFINITE);  // 加锁
-    list_add_tail(&request->list, &queue->head);  // 添加到链表尾部
-    SetEvent(queue->cond);  // 使用条件变量通知等待的线程
-    ReleaseMutex(queue->mutex);  // 解锁
-}
-
-/**
- * 从任务队列获取任务
- */
-Request* dequeue_request(RequestQueue* queue) {
-    WaitForSingleObject(queue->mutex, INFINITE);  // 加锁
-
-    // 使用条件变量避免任务队列为空时CPU忙等
-    while (list_empty(&queue->head)) {  // 如果队列为空
-        ReleaseMutex(queue->mutex);  // 先解锁
-        WaitForSingleObject(queue->cond, INFINITE);  // 等待条件变量
-        WaitForSingleObject(queue->mutex, INFINITE);  // 再次加锁
-    }
-    struct list_head* pos = queue->head.next;  // 获取队列头部的节点
-    list_del(pos);  // 从队列中删除
-    ReleaseMutex(queue->mutex);  // 解锁
-
-    return list_entry(pos, Request, list);  // 返回请求节点
-}
-
-/**
- * 销毁任务队列
- */
-void destroy_request_queue(RequestQueue* queue) {
-    CloseHandle(queue->mutex);  // 关闭互斥锁
-    CloseHandle(queue->cond);  // 关闭条件变量
-}
-
-/**
  * 工作线程函数
  * 任务是从请求队列里面取出一个请求并处理这个请求
  * 解码DNS包
@@ -141,7 +79,16 @@ void destroy_request_queue(RequestQueue* queue) {
 unsigned __stdcall worker_thread(void* arg) {
     DNS_RUNTIME* runtime = (DNS_RUNTIME*)arg;  // 获取运行时
     while (1) {
-        Request* request = dequeue_request(&request_queue);  // 获取请求
+        // 等待任务或者关闭事件
+        HANDLE events[] = { thread_pool.cond, thread_pool.shutdown_event };
+        DWORD wait_result = WaitForMultipleObjects(2, events, FALSE, INFINITE);
+
+        if (wait_result == WAIT_OBJECT_0 + 1) {
+            // 第二个句柄触发，收到关闭事件，退出线程
+            return 0;
+        }
+
+        Request* request = dequeue_request(&thread_pool.request_queue);  // 获取请求
         if (request) {
             struct sockaddr_in client_addr = request->client_addr;  // 获取客户端地址
             Buffer buffer = request->buffer;  // 获取数据缓冲区
@@ -247,7 +194,7 @@ void HandleFromClient(DNS_RUNTIME* runtime) {
         return;
     }
 
-    enqueue_request(&request_queue, client_Addr, buffer);  // 将请求放入队列
+    enqueue_request(&thread_pool.request_queue, client_Addr, buffer);  // 将请求放入队列
 }
 
 /**

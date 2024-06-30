@@ -4,6 +4,7 @@
 #include "handler.h"
 #include "resource.h"
 #include "list.h"
+#include "thread.h"
 
 int main(int argc, char **argv) {
     
@@ -20,8 +21,8 @@ int main(int argc, char **argv) {
     /* 初始化DNS服务器运行时 */
     DNS_RUNTIME runtime = runtime_init(&config);
 
-    /* 初始化请求队列 */
-    init_request_queue(&request_queue);
+    /* 线程池初始化，初始化请求队列，创建工作线程 */
+    init_thread_pool();
     
     /* 初始化拦截列表 */
     block_table_init();
@@ -31,24 +32,18 @@ int main(int argc, char **argv) {
     
     /* 初始化socket */
     socket_init(&runtime);
-
-    /* 创建工作线程 */
-    HANDLE worker_threads[THREAD_SIZE];
-    for (int i = 0; i < THREAD_SIZE; i++) {
-        worker_threads[i] = (HANDLE)_beginthreadex(NULL, 0, worker_thread, (void*)&runtime, 0, NULL);
-    }
     
     /* 处理客户端请求 */
     loop(&runtime);
 
     /* 等待工作线程结束工作 */
-    WaitForMultipleObjects(THREAD_SIZE, worker_threads, TRUE, INFINITE);
+    WaitForMultipleObjects(thread_pool.num_threads, thread_pool.threads, TRUE, INFINITE);
 
-    /* 销毁请求队列 */
-    destroy_request_queue(&request_queue);
+    /* 销毁线程池，销毁请求队列 */
+    destroy_thread_pool();
 
     /* 程序退出 */
     WSACleanup();
     return 0;
-    
+
 }
