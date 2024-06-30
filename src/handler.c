@@ -184,6 +184,7 @@ unsigned __stdcall worker_thread(void *arg)
                     printf("Send packet to upstream\n");
                     DNSPacket_print(&dnspacket);
                 }
+
                 buffer = DNSPacket_encode(dnspacket);
                 DNSPacket_destroy(dnspacket);
                 int status = sendto(runtime->client, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&runtime->upstream_addr, sizeof(runtime->upstream_addr));
@@ -740,58 +741,84 @@ Buffer DNSPacket_encode(DNS_PKT packet)
 {
     Buffer buffer = makeBuffer(DNS_PACKET_SIZE);
     uint8_t *data = buffer.data;
+    uint8_t offset=0;
     /* Header */
-    data = _write16(data, packet.header->ID);
+    offset = _write16(data, packet.header->ID);
+    data+=offset;
     /* QR+OP+AA+TC+RD */
-    data = _write8(data, packet.header->QR << 7 |
+    offset = _write8(data, packet.header->QR << 7 |
                              packet.header->Opcode << 3 |
                              packet.header->AA << 2 |
                              packet.header->TC << 1 |
                              packet.header->RD << 0);
+    data+=offset;
     /* RA+padding(3)+RCODE */
-    data = _write8(data, packet.header->RA << 7 | packet.header->Rcode);
+    offset = _write8(data, packet.header->RA << 7 | packet.header->Rcode);
+    data+=offset;
     /* Counts */
-    data = _write16(data, packet.header->QDCOUNT);
-    data = _write16(data, packet.header->ANCOUNT);
-    data = _write16(data, packet.header->NSCOUNT);
-    data = _write16(data, packet.header->ARCOUNT);
+    offset = _write16(data, packet.header->QDCOUNT);
+    data+=offset;
+    offset = _write16(data, packet.header->ANCOUNT);
+    data+=offset;
+    offset = _write16(data, packet.header->NSCOUNT);
+    data+=offset;
+    offset = _write16(data, packet.header->ARCOUNT);
+    data+=offset;
     /* Questions */
     for (int i = 0; i < packet.header->QDCOUNT; i++)
     {
-        data = toQname(packet.question[i].name, (char *)data);
-        data = _write16(data, packet.question[i].Qtype);
-        data = _write16(data, packet.question[i].Qclass);
+        offset = toQname(packet.question[i].name, (char *)data);
+        data+=offset;
+        offset = _write16(data, packet.question[i].Qtype);
+        data+=offset;
+        offset = _write16(data, packet.question[i].Qclass);
+        data+=offset;
     }
     /* Answers */
     for (int i = 0; i < packet.header->ANCOUNT; i++)
     {
-        data = toQname(packet.answer[i].name, (char *)data);
-        data = _write16(data, packet.answer[i].type);
-        data = _write16(data, packet.answer[i].addr_class);
-        data = _write32(data, packet.answer[i].TTL);
-        data = _write16(data, packet.answer[i].rdlength);
+        offset = toQname(packet.answer[i].name, (char *)data);
+        data+=offset;
+        offset = _write16(data+offset, packet.answer[i].type);
+        data+=offset;
+        offset = _write16(data, packet.answer[i].addr_class);
+        data+=offset;
+        offset = _write32(data, packet.answer[i].TTL);
+        data+=offset;
+        offset = _write16(data, packet.answer[i].rdlength);
+        data+=offset;
         memcpy(data, packet.answer[i].rdata, packet.answer[i].rdlength);
         data += packet.answer[i].rdlength;
     }
     /* Authorities */
     for (int i = 0; i < packet.header->NSCOUNT; i++)
     {
-        data = toQname(packet.authority[i].name, (char *)data);
-        data = _write16(data, packet.authority[i].type);
-        data = _write16(data, packet.authority[i].addr_class);
-        data = _write32(data, packet.authority[i].TTL);
-        data = _write16(data, packet.authority[i].rdlength);
+        offset = toQname(packet.authority[i].name, (char *)data);
+        data+=offset;
+        offset = _write16(data+offset, packet.authority[i].type);
+        data+=offset;
+        offset = _write16(data, packet.authority[i].addr_class);
+        data+=offset;
+        offset = _write32(data, packet.authority[i].TTL);
+        data+=offset;
+        offset = _write16(data, packet.authority[i].rdlength);
+        data+=offset;
         memcpy(data, packet.authority[i].rdata, packet.authority[i].rdlength);
         data += packet.authority[i].rdlength;
     }
     /* Additional */
     for (int i = 0; i < packet.header->ARCOUNT; i++)
     {
-        data = toQname(packet.additional[i].name, (char *)data);
-        data = _write16(data, packet.additional[i].type);
-        data = _write16(data, packet.additional[i].addr_class);
-        data = _write32(data, packet.additional[i].TTL);
-        data = _write16(data, packet.additional[i].rdlength);
+        offset = toQname(packet.additional[i].name, (char *)data);
+        data+=offset;
+        offset = _write16(data+offset, packet.additional[i].type);
+        data+=offset;
+        offset = _write16(data, packet.additional[i].addr_class);
+        data+=offset;
+        offset = _write32(data, packet.additional[i].TTL);
+        data+=offset;
+        offset = _write16(data, packet.additional[i].rdlength);
+        data+=offset;
         memcpy(data, packet.additional[i].rdata, packet.additional[i].rdlength);
         data += packet.additional[i].rdlength;
     }
@@ -830,7 +857,7 @@ uint32_t *getURL(char *name_ptr, char *res)
 /**
  * 解析域名（将点分十进制换为buffer模式）
  */
-uint8_t *toQname(char *name, char *data)
+uint8_t toQname(char *name, char *data)
 {
     int i, j = 0, length = 0;
     for (i = 0; i < strlen(name); i++)
@@ -849,7 +876,9 @@ uint8_t *toQname(char *name, char *data)
             data[i + 1] = name[i];
         }
     }
-    return data + strlen(name) + 1;
+    data[j]=length;
+    data[i+1]= 0;
+    return strlen(name) + 3;
 }
 /**
  * 解析数据包时指针的移动和读取指定长度的数据
@@ -859,30 +888,30 @@ uint8_t *_read32(uint8_t *ptr, uint32_t *value)
     *value = ntohl(*(uint32_t *)ptr);
     return ptr + 4;
 }
-uint8_t *_write32(uint8_t *ptr, uint32_t value)
+uint8_t _write32(uint8_t *ptr, uint32_t value)
 {
     *(uint32_t *)ptr = htonl(value);
-    return ptr + 4;
+    return 4;
 }
 uint8_t *_read16(uint8_t *ptr, uint16_t *value)
 {
     *value = ntohs(*(uint16_t *)ptr);
     return ptr + 2;
 }
-uint8_t *_write16(uint8_t *ptr, uint16_t value)
+uint8_t _write16(uint8_t *ptr, uint16_t value)
 {
     *(uint16_t *)ptr = htons(value);
-    return ptr + 2;
+    return 2;
 }
 uint8_t *_read8(uint8_t *ptr, uint8_t *value)
 {
     *value = *(uint8_t *)ptr;
     return ptr + 1;
 }
-uint8_t *_write8(uint8_t *ptr, uint8_t value)
+uint8_t _write8(uint8_t *ptr, uint8_t value)
 {
     *(uint8_t *)ptr = value;
-    return ptr + 1;
+    return 1;
 }
 
 /* 寻找空闲会话id */
