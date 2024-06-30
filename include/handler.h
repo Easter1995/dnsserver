@@ -61,7 +61,6 @@ IdMap getIdMap(IdMap *idMap, uint16_t i);
 DNS_PKT recvPacket(DNS_RUNTIME *runtime, SOCKET socket, Buffer *buffer, struct sockaddr_in *client_Addr, int *error);
 
 /*生成回应包*/
-DNS_PKT prepare_answerPacket(uint32_t ip, DNS_PKT packet);
-
+DNS_PKT prepare_answerPacket(uint32_t *ip, DNS_PKT packet, int ip_count);
 
 #endif
