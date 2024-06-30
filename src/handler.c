@@ -114,6 +114,7 @@ unsigned __stdcall worker_thread(void *arg)
             if (dnspacket.question->Qtype == 1)
             { // 只有当请求的资源类型为ipv4时，服务器做出回应
                 uint32_t target_ip[MAX_IP_COUNT];
+                uint32_t wrong_ip;
                 // 拦截不良网站
                 if (trie_search(dnspacket.question->name, &target_ip))
                 {
@@ -216,18 +217,6 @@ void HandleFromClient(DNS_RUNTIME *runtime)
     }
 
     enqueue_request(&thread_pool.request_queue, client_Addr, dnspacket, buffer); // 将请求放入队列
-}
-
-/**
- * 地址是否为ipv4
- */
-int IsCacheable(DNSQType type)
-{
-    if (type == A)
-    {
-        return 1;
-    }
-    return 0;
 }
 
 /**
