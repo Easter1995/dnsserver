@@ -109,7 +109,7 @@ unsigned __stdcall worker_thread(void *arg)
             if (dnspacket.header->QR != QRQUERY || dnspacket.header->QDCOUNT != 1)
             {                                 // 若dnspacket不是一个查询类型的 DNS 报文或者其问题字段不是一个问题
                 DNSPacket_destroy(dnspacket); // 销毁packet，解除内存占用
-                return;
+                return 0;
             }
             if (dnspacket.question->Qtype == 1)
             { // 只有当请求的资源类型为ipv4时，服务器做出回应
@@ -138,7 +138,7 @@ unsigned __stdcall worker_thread(void *arg)
                     }
                     else
                         printf("Sent %d bytes to server.\n", sendBytes);
-                    return;
+                    return 0;
                 }
                 // 先在本地cache中搜索
                 if (IsCacheable(dnspacket.question->Qtype))
@@ -171,7 +171,7 @@ unsigned __stdcall worker_thread(void *arg)
                         }
                         else
                             printf("Sent %d bytes to server.\n", sendBytes);
-                        return;
+                        return 0;
                     }
                 }
                 /*若cache未命中，则需要向上级发送包进一步查询*/
