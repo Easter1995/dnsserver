@@ -59,7 +59,7 @@ void cache_init();
 void cache_add_one(char *name, uint32_t ip, uint32_t ttl);
 
 /* 查找cache */
-bool cache_search(char *name, uint32_t *ip_array, int max_ip_count, int *actual_ip_count);
+bool cache_search(char *name, uint32_t *ip_array);
 
 /* 获取cache_list的互斥量句柄 */
 HANDLE get_cache_lock();
