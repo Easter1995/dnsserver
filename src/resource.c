@@ -132,13 +132,13 @@ void cache_add_one(char *name, uint32_t ip, uint32_t ttl)
 /**
  * 查找一条cache并返回ip，若找到，其余未命中cache的count++
  */
-bool cache_search(char *name, uint32_t *ip)
+bool cache_search(char *name, uint32_t *ip_array)
 {
     bool ret = false;
-    uint32_t hit_cnt = 0; // 命中节点的计数器值
-    struct list_head *pos;
-    CACHE_ENTRY *entry;            // 当前遍历到的节点
-    CACHE_ENTRY *hit_entry = NULL; // 命中的节点
+    uint32_t hit_cnt = 0;  // 命中节点的计数器值
+    struct list_head *pos; // 当前遍历到的链表节点
+    CACHE_ENTRY *entry;    // 当前遍历到的节点
+    int ip_count = 0;      // 找到的IP地址数量
 
     // 等待获取互斥量的控制权
     DWORD dwWaitResult = WaitForSingleObject(cache_list.lock, INFINITE);
@@ -157,12 +157,15 @@ bool cache_search(char *name, uint32_t *ip)
                 if (entry->expireTime < time(NULL))
                 {
                     list_del(&entry->list);
-                    return false;
+                    continue;
                 }
                 ret = true;
-                hit_entry = entry;
                 hit_cnt = entry->count;
-                *ip = entry->ip;
+                if (ip_count < MAX_IP_COUNT)
+                {
+                    ip_array[ip_count] = entry->ip;
+                    ip_count++;
+                }
                 entry->count = 0;
             }
         }

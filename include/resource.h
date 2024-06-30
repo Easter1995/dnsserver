@@ -12,6 +12,7 @@
 
 #define MAX_TABLE_LEN 1024
 #define MAX_CACHE_LEN 1024
+#define MAX_IP_COUNT 10
 
 /* 拦截列表，使用字典树存储 */
 #define block_table trie
@@ -58,7 +59,7 @@ void cache_init();
 void cache_add_one(char *name, uint32_t ip, uint32_t ttl);
 
 /* 查找cache */
-bool cache_search(char *name, uint32_t *ip);
+bool cache_search(char *name, uint32_t *ip_array, int max_ip_count, int *actual_ip_count);
 
 /* 获取cache_list的互斥量句柄 */
 HANDLE get_cache_lock();
