@@ -128,11 +128,11 @@ unsigned __stdcall worker_thread(void *arg)
                         printf("Domain name blocked!\n");
                         printf("TOTAL COUNT %d\n", runtime->totalCount);
                     }
-                    answer_Packet.header->RA = 1;
+                    
                     buffer = DNSPacket_encode(answer_Packet); // 将DNS包转换为buffer，方便发送
                     DNSPacket_destroy(answer_Packet);
                     int sendBytes = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_Addr, sizeof(client_Addr)); // 由服务器发给客户端找到的ip信息
-                    free(buffer.data);                                                                                                                            // 数据发送完后释放缓存
+                    free(buffer.data);                                                                                                                    // 数据发送完后释放缓存
                     if (sendBytes == SOCKET_ERROR)
                     {
                         printf("sendto failed: %d\n", WSAGetLastError());
@@ -185,13 +185,19 @@ unsigned __stdcall worker_thread(void *arg)
                     printf("Send packet to upstream\n");
                     DNSPacket_print(&dnspacket);
                 }
+                printf("Send packet to upstream\n");
 
                 buffer = DNSPacket_encode(dnspacket);
                 DNSPacket_destroy(dnspacket);
                 int status = sendto(runtime->client, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&runtime->upstream_addr, sizeof(runtime->upstream_addr));
-                if (status < 0)
+                if (status == SOCKET_ERROR)
                 {
-                    printf("Error sendto: %d\n", WSAGetLastError());
+                    printf("sendto failed: %d\n", WSAGetLastError());
+                    WSACleanup();
+                }
+                else
+                {
+                    printf("Sent %d bytes to UP-server.\n", status);
                 }
             }
             free(buffer.data);
@@ -208,6 +214,8 @@ unsigned __stdcall worker_thread(void *arg)
  */
 void HandleFromClient(DNS_RUNTIME *runtime)
 {
+    printf("receive a request\n");
+
     Buffer buffer = makeBuffer(DNS_PACKET_SIZE); // 创建缓冲区
     struct sockaddr_in client_Addr;              // 存储客户端的地址信息(IP + port)
     int status = 0;                              // 存储接收数据包的状态
@@ -460,11 +468,11 @@ DNS_PKT prepare_answerPacket(uint32_t *ip, DNS_PKT packet, int ip_count)
     strcpy(packet.answer->name, packet.question->name);
     if (ip[0] == 0)
     {
-        DNS_PKT new_pkt = init_DNSpacket();
-        new_pkt.header->Rcode = 3;
-        new_pkt.header->ID = packet.header->ID;
-        new_pkt.header->QR = 1;
-        return new_pkt;
+        packet.header->ANCOUNT = 0;
+        packet.header->Rcode = 3;
+        packet.header->QR = 1;
+        packet.answer = NULL;
+        return packet;
     }
     packet.header->Rcode = 0;
     packet.header->QR = QRRESPONSE;
@@ -498,7 +506,9 @@ DNS_PKT recvPacket(DNS_RUNTIME *runtime, SOCKET socket, Buffer *buffer, struct s
     {                               // 正常接受包
         buffer->length = recvBytes; // 更新buffer长度字段
         *error = recvBytes;         // 给函数调用者的标识
-        DNSPacket_decode(buffer, &packet);
+        DNSPacket_decode(buffer, &packet);  
+        // Buffer newbuffer=makeBuffer(DNS_PACKET_SIZE);
+        // newbuffer=DNSPacket_encode(packet);
         if (buffer->length == 0)
         {
             *error = -2; // 指示接收包为空包
@@ -527,6 +537,7 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
     Buffer buffer = makeBuffer(DNS_PACKET_SIZE); // 创建一个缓冲区，用于存放将来发送的包的数据
     int status = 0;
     DNS_PKT packet = recvPacket(runtime, runtime->client, &buffer, &runtime->upstream_addr, &status);
+    
     if (status <= 0)
     {
         // 接收失败 ———— 空包，甚至不需要destroy。
@@ -534,7 +545,11 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
         return;
     }
     IdMap client = getIdMap(runtime->idmap, packet.header->ID); 
-    packet.header->ID = client.originalId;                      // 还原id
+    packet.header->ID = client.originalId; // 还原id
+
+    _write16(buffer.data, client.originalId);
+    
+    
     /*将接收到的上游应答 发送回客户端*/
     if (runtime->config.debug)
     {
@@ -554,16 +569,29 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
         runtime->totalCount++;
         printf("TOTAL COUNT %d\n", runtime->totalCount);
     } // 需要的话，输出调试信息
-    Buffer buffer_tmp;
-    buffer_tmp = DNSPacket_encode(packet); // 将上游响应的DNS报文转换为buffer
-    for (int i = 0; i < 16; i++)
-    {
-        buffer.data[i] = buffer_tmp.data[i]; // 将上游响应的数据内容存入发送缓冲区
-    }
-    free(buffer_tmp.data);
+    // Buffer buffer_tmp;
+    // buffer_tmp = DNSPacket_encode(packet); // 将上游响应的DNS报文转换为buffer
+    
+    // 确认发送数据长度
+    // buffer.length = buffer_tmp.length;
+
+    // 将上游响应的数据内容存入发送缓冲区
+    // memcpy(buffer.data, buffer_tmp.data, buffer_tmp.length);
+    
+    // free(buffer_tmp.data);
     status = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client.addr, sizeof(client.addr));
-    if (status < 0)
-    { // 为什么不是status < buffer.length？
+    if (status == SOCKET_ERROR)
+    {
+        printf("sendto failed: %d\n", WSAGetLastError());
+        WSACleanup();
+    }
+    else
+    {
+        printf("Sent %d bytes to client.\n", status);
+    }
+    
+    if (status < buffer.length)
+    {
         printf("Error sendto: %d\n", WSAGetLastError());
     }
     /*判断是否应该缓存*/
@@ -591,6 +619,7 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
 }
 
 
+
 /**
  * 循环处理用户请求
  * 监听和处理两个socket是否有数据可读
@@ -604,7 +633,7 @@ void loop(DNS_RUNTIME *runtime)
         FD_SET(runtime->server, &readfds); // 添加 server 到 readfds 中
         FD_SET(runtime->client, &readfds); // 添加 client 到 readfds 中
         struct timeval tv;
-        tv.tv_sec = 5; // 设置超时时间为 5 秒
+        tv.tv_sec = 10; // 设置超时时间为 10 秒
         tv.tv_usec = 0;
         // 检查是否有就绪的文件描述符（即有数据可读）
         int ready = select(0, &readfds, NULL, NULL, &tv);
@@ -704,7 +733,8 @@ void DNSPacket_decode(Buffer *buffer, DNS_PKT *packet)
         /*Name*/
         for (int i = 0; i < packet->header->ANCOUNT; i++)
         {
-            Rdata_ptr = getURL(Rdata_ptr, packet->answer[i].name);
+
+            Rdata_ptr += decodeQname((char *)Rdata_ptr, (char *)buffer->data, packet->answer[i].name);
             /*Type*/
             uint16_t tmp;
             Rdata_ptr = _read16(Rdata_ptr, &tmp);
@@ -733,6 +763,7 @@ void DNSPacket_decode(Buffer *buffer, DNS_PKT *packet)
     {
         packet->answer = NULL;
     }
+
 }
 
 /**
@@ -823,10 +854,52 @@ Buffer DNSPacket_encode(DNS_PKT packet)
         memcpy(data, packet.additional[i].rdata, packet.additional[i].rdlength);
         data += packet.additional[i].rdlength;
     }
-    buffer.length = (uint32_t)(data - buffer.data - 1);
+    buffer.length = (uint32_t)(data - buffer.data);
     return buffer;
 }
 
+
+int decodeQname(char *ptr, char *start, char *newStr) {
+    newStr[0] = '\0';
+    int len = 0;
+    int dot = 0;
+    for (int i = 0; 1; i++) {
+        if (dot == i) {
+            if ((unsigned char)ptr[i] >= 0xC0) {//前两位是11，是压缩指针的形式
+                int offset = ((unsigned char)ptr[i] << 8 | (unsigned char)ptr[i + 1]) & 0xfff;
+                strcat_s(newStr, 256, ".");
+                char tmpStr[257];
+                decodeQname(start + offset, start, tmpStr);
+                strcat_s(newStr, 256, tmpStr);
+                len = i + 2;
+                break;
+            } else if (ptr[i] != '\0') {
+                strcat_s(newStr, 256, ".");
+                dot = i + ptr[i] + 1;
+            } else {
+                size_t strLength = strlen(newStr);
+                newStr[strLength] = ptr[i];
+                newStr[strLength + 1] = 0;
+                len = i + 1;
+                break;
+            }
+        } else if (ptr[i] != '\0') {
+            size_t strLength = strlen(newStr);
+            newStr[strLength] = ptr[i];
+            newStr[strLength + 1] = 0;
+        } else {
+            size_t strLength = strlen(newStr);
+            newStr[strLength] = ptr[i];
+            newStr[strLength + 1] = 0;
+            len = i + 1;
+            break;
+        }
+    }
+    char tmp[256] = "";
+    strcpy_s(tmp, 256, &newStr[1]);
+    strcpy_s(newStr, 256, tmp);
+    return len;
+}
 /**
  * 解析域名（给出点分十进制）
  */
@@ -879,7 +952,7 @@ uint8_t toQname(char *name, char *data)
     }
     data[j]=length;
     data[i+1]= 0;
-    return strlen(name) + 3;
+    return strlen(name) + 2;
 }
 /**
  * 解析数据包时指针的移动和读取指定长度的数据

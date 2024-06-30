@@ -99,6 +99,7 @@ void adjust_thread_pool()
 void enqueue_task(struct sockaddr_in client_addr, DNS_PKT pkt, Buffer buffer)
 {
     enqueue_request(&thread_pool.request_queue, client_addr, pkt, buffer);
+    SetEvent(thread_pool.cond);
     adjust_thread_pool();
 }
 
@@ -109,6 +110,7 @@ Request *dequeue_task(Request *request)
 {
     WaitForSingleObject(thread_pool.mutex, INFINITE); // 获取线程池资源
     Request *req = dequeue_request(&thread_pool.request_queue);
+    thread_pool.request_queue.queue_len--;
     ReleaseMutex(thread_pool.mutex); // 释放锁，归还线程池资源
     return req;
 }
@@ -138,7 +140,6 @@ void enqueue_request(RequestQueue *queue, struct sockaddr_in client_addr, DNS_PK
 
     WaitForSingleObject(queue->mutex, INFINITE); // 获取锁
     list_add_tail(&request->list, &queue->head); // 添加到链表尾部
-    SetEvent(queue->cond);                       // 使用条件变量通知等待的线程
     ReleaseMutex(queue->mutex);                  // 释放锁
 }
 
@@ -157,7 +158,7 @@ Request* dequeue_request(RequestQueue *queue)
         WaitForSingleObject(queue->mutex, INFINITE); // 再次加锁
     }
     struct list_head *pos = queue->head.next; // 获取队列头部的节点
-    queue->queue_len--;
+    
     list_del(pos);                            // 从队列中删除
     ReleaseMutex(queue->mutex);               // 解锁
 
