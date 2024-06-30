@@ -13,9 +13,7 @@
 // #define THREAD_COUNT_LOW  2    // 低任务量
 // #define THREAD_COUNT_MEDIUM  4 // 中等任务量
 // #define THREAD_COUNT_HIGH  8   // 高任务量
-#define THREAD_COUNT_LOW  1    // 低任务量
-#define THREAD_COUNT_MEDIUM  1 // 中等任务量
-#define THREAD_COUNT_HIGH  1   // 高任务量
+#define THREAD_COUNT  3  
 
 /**
  * 定义任务结构
@@ -32,7 +30,7 @@ typedef struct Request{
  */
 typedef struct {
     struct list_head head; // 链表头
-    int queue_len;    // 任务队列长度
+    int queue_len;         // 任务队列长度
     HANDLE mutex;          // 互斥锁
     HANDLE cond;           // 条件变量
 } RequestQueue;
@@ -41,9 +39,9 @@ typedef struct {
  * 定义线程池
  */
 typedef struct ThreadPool{
-    HANDLE threads[THREAD_COUNT_HIGH]; // 存放线程的句柄
+    HANDLE threads[THREAD_COUNT]; // 存放线程的句柄
     int num_threads;
-    int max_threads;
+    // int max_threads;
     RequestQueue request_queue;
     HANDLE mutex;
     HANDLE cond;
