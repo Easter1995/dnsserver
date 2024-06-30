@@ -6,8 +6,7 @@
 #include "list.h"
 #include "thread.h"
 
-DNS_RUNTIME runtime;
-DNS_CONFIG config;
+
 
 /**
  * 按 Ctrl+C 优雅退出

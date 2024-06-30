@@ -43,15 +43,15 @@ Buffer makeBuffer(int len);
 uint32_t *getURL(char *name_ptr, char *res);
 
 /*点分十进制转标准形式*/
-uint8_t *toQname(char *name, char *data);
+uint8_t toQname(char *name, char *data);
 
 /*读取数据时指针的移动*/
 uint8_t *_read32(uint8_t *ptr, uint32_t *value);
-uint8_t *_write32(uint8_t *ptr, uint32_t value);
+uint8_t _write32(uint8_t *ptr, uint32_t value);
 uint8_t *_read16(uint8_t *ptr, uint16_t *value);
-uint8_t *_write16(uint8_t *ptr, uint16_t value);
+uint8_t _write16(uint8_t *ptr, uint16_t value);
 uint8_t *_read8(uint8_t *ptr, uint8_t *value);
-uint8_t *_write8(uint8_t *ptr, uint8_t value);
+uint8_t _write8(uint8_t *ptr, uint8_t value);
 
 /*寻找空闲回话id*/
 uint16_t setIdMap(IdMap *idMap, IdMap item, uint16_t curMaxId);

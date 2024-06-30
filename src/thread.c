@@ -17,7 +17,7 @@ void init_thread_pool()
     for (int i = 0; i < thread_pool.num_threads; i++)
     {
         // 保存线程句柄
-        thread_pool.threads[i] = (HANDLE)_beginthreadex(NULL, 0, worker_thread, NULL, 0, NULL);
+        thread_pool.threads[i] = (HANDLE)_beginthreadex(NULL, 0, worker_thread, &runtime, 0, NULL);
     }
 }
 
@@ -72,7 +72,7 @@ void adjust_thread_pool()
     // 增加线程数量
     while (thread_pool.num_threads < desired_threads && thread_pool.num_threads < THREAD_COUNT_HIGH)
     {
-        thread_pool.threads[thread_pool.num_threads] = (HANDLE)_beginthreadex(NULL, 0, worker_thread, NULL, 0, NULL);
+        thread_pool.threads[thread_pool.num_threads] = (HANDLE)_beginthreadex(NULL, 0, worker_thread, &runtime, 0, NULL);
         thread_pool.num_threads++;
     }
 
