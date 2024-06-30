@@ -83,62 +83,74 @@ void socket_init(DNS_RUNTIME *runtime)
  * 解码DNS包
  * 查看cache是否命中，未命中向上游服务器发出请求
  */
-unsigned __stdcall worker_thread(void* arg) {
-    DNS_RUNTIME* runtime = (DNS_RUNTIME*)arg;  // 获取运行时
-    while (1) {
+unsigned __stdcall worker_thread(void *arg)
+{
+    DNS_RUNTIME *runtime = (DNS_RUNTIME *)arg; // 获取运行时
+    while (1)
+    {
         // 等待任务或者关闭事件
-        HANDLE events[] = { thread_pool.cond, thread_pool.shutdown_event };
+        HANDLE events[] = {thread_pool.cond, thread_pool.shutdown_event};
         DWORD wait_result = WaitForMultipleObjects(2, events, FALSE, INFINITE);
 
-        if (wait_result == WAIT_OBJECT_0 + 1) {
+        if (wait_result == WAIT_OBJECT_0 + 1)
+        {
             // 第二个句柄触发，收到关闭事件，退出线程
             return 0;
         }
 
-        Request* request = dequeue_request(&thread_pool.request_queue);  // 获取请求
-        if (request) {
-            struct sockaddr_in client_addr = request->client_addr;  // 获取客户端地址
-            Buffer buffer = request->buffer;  // 获取数据缓冲区
+        Request *request = dequeue_request(&thread_pool.request_queue); // 获取请求
+        if (request)
+        {
+            struct sockaddr_in client_addr = request->client_addr; // 获取客户端地址
+            Buffer buffer = request->buffer;                       // 获取数据缓冲区
 
             // 处理请求的逻辑
             int status = 0;
-            DNS_PKT dnspacket = DNSPacket_decode(&buffer);  // 解码DNS包
-            if (buffer.length <= 0) {
+            DNS_PKT dnspacket = DNSPacket_decode(&buffer); // 解码DNS包
+            if (buffer.length <= 0)
+            {
                 free(buffer.data);
                 free(request);
                 continue;
             }
 
-            if (dnspacket.header->QR != QRQUERY || dnspacket.header->QDCOUNT < 1) {
+            if (dnspacket.header->QR != QRQUERY || dnspacket.header->QDCOUNT < 1)
+            {
                 DNSPacket_destroy(dnspacket);
                 free(buffer.data);
                 free(request);
                 continue;
             }
 
-            if (dnspacket.header->QDCOUNT > 1) {
-                if (runtime->config.debug) {
+            if (dnspacket.header->QDCOUNT > 1)
+            {
+                if (runtime->config.debug)
+                {
                     printf("Too many questions. \n");
                 }
                 dnspacket.header->QR = QRRESPONSE;
                 dnspacket.header->Rcode = FORMERR;
                 buffer = DNSPacket_encode(dnspacket);
                 DNSPacket_destroy(dnspacket);
-                sendto(runtime->server, (char*)buffer.data, buffer.length, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
+                sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_addr, sizeof(client_addr));
                 free(buffer.data);
                 free(request);
                 continue;
             }
 
-            if (IsCacheable(dnspacket.question->Qtype)) {
+            if (IsCacheable(dnspacket.question->Qtype))
+            {
                 uint32_t target_ip;
                 bool find_result = cache_search(dnspacket.question->name, &target_ip);
-                if (find_result) {
-                    if (runtime->config.debug) {
+                if (find_result)
+                {
+                    if (runtime->config.debug)
+                    {
                         printf("Cache Hint! Expected ip is %d", target_ip);
                     }
-                    DNS_PKT answer_Packet = prepare_answerPacket(target_ip);
-                    if (runtime->config.debug) {
+                    DNS_PKT answer_Packet = prepare_answerPacket(target_ip, dnspacket);
+                    if (runtime->config.debug)
+                    {
                         printf("Send packet back to client %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
                         DNSPacket_print(&answer_Packet);
                         runtime->totalCount++;
@@ -148,13 +160,16 @@ unsigned __stdcall worker_thread(void* arg) {
                     answer_Packet.header->RA = 1;
                     buffer = DNSPacket_encode(answer_Packet);
                     DNSPacket_destroy(answer_Packet);
-                    int sendBytes = sendto(runtime->server, (char*)buffer.data, buffer.length, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
+                    int sendBytes = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_addr, sizeof(client_addr));
                     free(buffer.data);
                     free(request);
-                    if (sendBytes == SOCKET_ERROR) {
+                    if (sendBytes == SOCKET_ERROR)
+                    {
                         printf("sendto failed: %d\n", WSAGetLastError());
                         WSACleanup();
-                    } else {
+                    }
+                    else
+                    {
                         printf("Sent %d bytes to server.\n", sendBytes);
                     }
                     continue;
@@ -162,21 +177,24 @@ unsigned __stdcall worker_thread(void* arg) {
             }
 
             /* 如果cache未命中，则向上级服务器查询 */
-            IdMap mapItem; // 创建一个新idMap项，用于设置向上级服务器查询的会话id
-            mapItem.addr = client_addr; // 设置该次会话id项对应的客户端地址
-            mapItem.originalId = dnspacket.header->ID; // 设置该次会话id项对应的 请求方客户端发来的DNS报文的会话id
-            mapItem.time = time(NULL) + IDMAP_TIMEOUT; // 设置该次会话id的过期时间
+            IdMap mapItem;                                                      // 创建一个新idMap项，用于设置向上级服务器查询的会话id
+            mapItem.addr = client_addr;                                         // 设置该次会话id项对应的客户端地址
+            mapItem.originalId = dnspacket.header->ID;                          // 设置该次会话id项对应的 请求方客户端发来的DNS报文的会话id
+            mapItem.time = time(NULL) + IDMAP_TIMEOUT;                          // 设置该次会话id的过期时间
             runtime->maxId = setIdMap(runtime->idmap, mapItem, runtime->maxId); // 分配id号
-            dnspacket.header->ID = runtime->maxId; // 将setIdMap寻找到的空闲id设为本次向上游服务器发出请求的id
-            runtime->maxId = (runtime->maxId + 1) % UINT16_MAX; //???
+            dnspacket.header->ID = runtime->maxId;                              // 将setIdMap寻找到的空闲id设为本次向上游服务器发出请求的id
+            runtime->maxId = (runtime->maxId + 1) % UINT16_MAX;                 //???
             buffer = DNSPacket_encode(dnspacket);
             DNSPacket_destroy(dnspacket);
             struct sockaddr_in upstreamAddr = runtime->upstream_addr;
-            int sendBytes = sendto(runtime->client, (char*)buffer.data, buffer.length, 0, (struct sockaddr*)&upstreamAddr, sizeof(upstreamAddr));
-            if (sendBytes == SOCKET_ERROR) {
+            int sendBytes = sendto(runtime->client, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&upstreamAddr, sizeof(upstreamAddr));
+            if (sendBytes == SOCKET_ERROR)
+            {
                 printf("sendto failed: %d\n", WSAGetLastError());
                 WSACleanup();
-            } else {
+            }
+            else
+            {
                 printf("Sent %d bytes to upstream server.\n", sendBytes);
             }
             free(buffer.data);
@@ -191,10 +209,11 @@ unsigned __stdcall worker_thread(void* arg) {
  * 任务是监听客户端的请求并接受请求
  * 将请求放入请求队列
  */
-void HandleFromClient(DNS_RUNTIME* runtime) {
-    Buffer buffer = makeBuffer(DNS_PACKET_SIZE);  // 创建缓冲区
-    struct sockaddr_in client_Addr; // 存储客户端的地址信息(IP + port)
-    int status = 0; // 存储接收数据包的状态
+void HandleFromClient(DNS_RUNTIME *runtime)
+{
+    Buffer buffer = makeBuffer(DNS_PACKET_SIZE); // 创建缓冲区
+    struct sockaddr_in client_Addr;              // 存储客户端的地址信息(IP + port)
+    int status = 0;                              // 存储接收数据包的状态
 
     // 设置文件描述符集
     // 当服务器套接字接收到客户端的连接请求或数据时，操作系统会将该套接字标记为“可读”，这意味着有数据可以读取
@@ -203,22 +222,26 @@ void HandleFromClient(DNS_RUNTIME* runtime) {
     FD_SET(runtime->server, &read_fds);
 
     struct timeval timeout;
-    timeout.tv_sec = 5;  // 设置超时时间，单位为秒
+    timeout.tv_sec = 5; // 设置超时时间，单位为秒
     timeout.tv_usec = 0;
 
     // 监视文件描述符集合中的文件描述符是否发生了 I/O 事件，即socket是否有数据可读
     int activity = select(runtime->server + 1, &read_fds, NULL, NULL, &timeout);
 
     // 有事件发生，接受包并且往请求队列添加任务
-    if (activity > 0 && FD_ISSET(runtime->server, &read_fds)) {
-        DNS_PKT dnspacket = recvPacket(runtime, runtime->server, &buffer, &client_Addr, &status);  // 接收数据包
-        if (status <= 0) {
+    if (activity > 0 && FD_ISSET(runtime->server, &read_fds))
+    {
+        DNS_PKT dnspacket = recvPacket(runtime, runtime->server, &buffer, &client_Addr, &status); // 接收数据包
+        if (status <= 0)
+        {
             free(buffer.data);
             return;
         }
 
-        enqueue_request(&thread_pool.request_queue, client_Addr, buffer);  // 将请求放入队列
-    } else {
+        enqueue_request(&thread_pool.request_queue, client_Addr, buffer); // 将请求放入队列
+    }
+    else
+    {
         // 没有活动或者select超时
         free(buffer.data);
     }
@@ -227,8 +250,10 @@ void HandleFromClient(DNS_RUNTIME* runtime) {
 /**
  * 地址是否可以存入cache
  */
-int IsCacheable(DNSQType type){
-    if (type == A || type == AAAA || type == CNAME || type == PTR || type == NS || type == TXT) {
+int IsCacheable(DNSQType type)
+{
+    if (type == A || type == AAAA || type == CNAME || type == PTR || type == NS || type == TXT)
+    {
         return 1;
     }
     return 0;
@@ -454,16 +479,16 @@ void DNSPacket_print(DNS_PKT *packet)
 /**
  * 生成回应包
  */
-DNS_PKT prepare_answerPacket(uint32_t ip,DNS_PKT packet)
+DNS_PKT prepare_answerPacket(uint32_t ip, DNS_PKT packet)
 {
-    packet.header->RA=1;
-    strcpy(packet.answer->name,packet.question->name);
+    packet.header->RA = 1;
+    strcpy(packet.answer->name, packet.question->name);
     packet.header->Rcode = 0;
     packet.header->QR = QRRESPONSE;
-    packet.header->ANCOUNT = 1; 
-    packet.answer->type=1;
-    packet.answer->addr_class=1;
-    packet.answer->rdlength=4;
+    packet.header->ANCOUNT = 1;
+    packet.answer->type = 1;
+    packet.answer->addr_class = 1;
+    packet.answer->rdlength = 4;
     return packet;
 }
 
@@ -525,52 +550,20 @@ void HandleFromClient(DNS_RUNTIME *runtime)
         DNSPacket_destroy(dnspacket); // 销毁packet，解除内存占用
         return;
     }
-    if(dnspacket.question->Qtype==1){//只有当请求的资源类型为ipv4时，服务器做出回应
-    uint32_t target_ip;
-    // 拦截不良网站
-    if (trie_search(dnspacket.question->name, &target_ip))
-    {
-        DNS_PKT answer_Packet = prepare_answerPacket(target_ip,dnspacket);
-        if (runtime->config.debug)
-        { // 输出调试信息
-            printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
-            DNSPacket_print(&answer_Packet);
-            runtime->totalCount++;
-            printf("Domain name blocked!\n");
-            printf("TOTAL COUNT %d\n", runtime->totalCount);
-        }
-        answer_Packet.header->RA = 1;
-        buffer = DNSPacket_encode(answer_Packet); // 将DNS包转换为buffer，方便发送
-        DNSPacket_destroy(answer_Packet);
-        int sendBytes = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_Addr, sizeof(sizeof(client_Addr))); // 由服务器发给客户端找到的ip信息
-        free(buffer.data);                                                                                                                            // 数据发送完后释放缓存
-        if (sendBytes == SOCKET_ERROR)
+    if (dnspacket.question->Qtype == 1)
+    { // 只有当请求的资源类型为ipv4时，服务器做出回应
+        uint32_t target_ip;
+        // 拦截不良网站
+        if (trie_search(dnspacket.question->name, &target_ip))
         {
-            printf("sendto failed: %d\n", WSAGetLastError());
-            WSACleanup();
-        }
-        else
-            printf("Sent %d bytes to server.\n", sendBytes);
-        return;
-    }
-    // 先在本地cache中搜索
-    if (IsCacheable(dnspacket.question->Qtype))
-    {
-        bool find_result = cache_search(dnspacket.question->name, &target_ip);
-        if (find_result)
-        { // 若在cache中查询到了结果
-            if (runtime->config.debug)
-            { // 打印debug信息
-                printf("Cache Hint! Expected ip is %d", target_ip);
-            }
-            DNS_PKT answer_Packet = prepare_answerPacket(target_ip,dnspacket);
+            DNS_PKT answer_Packet = prepare_answerPacket(target_ip, dnspacket);
             if (runtime->config.debug)
             { // 输出调试信息
                 printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
                 DNSPacket_print(&answer_Packet);
                 runtime->totalCount++;
+                printf("Domain name blocked!\n");
                 printf("TOTAL COUNT %d\n", runtime->totalCount);
-                printf("CACHE SIZE %d\n", cache_list.list_size);
             }
             answer_Packet.header->RA = 1;
             buffer = DNSPacket_encode(answer_Packet); // 将DNS包转换为buffer，方便发送
@@ -586,28 +579,61 @@ void HandleFromClient(DNS_RUNTIME *runtime)
                 printf("Sent %d bytes to server.\n", sendBytes);
             return;
         }
-    }
-    /*若cache未命中，则需要向上级发送包进一步查询*/
-    IdMap mapItem;                             // 声明一个ID转换表
-    mapItem.addr = client_Addr;                // 请求方的地址
-    mapItem.originalId = dnspacket.header->ID; // 请求方的ID
-    mapItem.time = time(NULL) + IDMAP_TIMEOUT; // 设置该记录的过期时间
-    runtime->maxId = setIdMap(runtime->idmap, mapItem, runtime->maxId);
-    dnspacket.header->ID = runtime->maxId;
-    // 发走
-    if (runtime->config.debug)
-    {
-        printf("Send packet to upstream\n");
-        DNSPacket_print(&dnspacket);
-    }
-    buffer = DNSPacket_encode(dnspacket);
-    DNSPacket_destroy(dnspacket);
-    status = sendto(runtime->client, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&runtime->upstream_addr, sizeof(runtime->upstream_addr));
-    free(buffer.data);
-    if (status < 0)
-    {
-        printf("Error sendto: %d\n", WSAGetLastError());
-    }
+        // 先在本地cache中搜索
+        if (IsCacheable(dnspacket.question->Qtype))
+        {
+            bool find_result = cache_search(dnspacket.question->name, &target_ip);
+            if (find_result)
+            { // 若在cache中查询到了结果
+                if (runtime->config.debug)
+                { // 打印debug信息
+                    printf("Cache Hint! Expected ip is %d", target_ip);
+                }
+                DNS_PKT answer_Packet = prepare_answerPacket(target_ip, dnspacket);
+                if (runtime->config.debug)
+                { // 输出调试信息
+                    printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
+                    DNSPacket_print(&answer_Packet);
+                    runtime->totalCount++;
+                    printf("TOTAL COUNT %d\n", runtime->totalCount);
+                    printf("CACHE SIZE %d\n", cache_list.list_size);
+                }
+                answer_Packet.header->RA = 1;
+                buffer = DNSPacket_encode(answer_Packet); // 将DNS包转换为buffer，方便发送
+                DNSPacket_destroy(answer_Packet);
+                int sendBytes = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_Addr, sizeof(sizeof(client_Addr))); // 由服务器发给客户端找到的ip信息
+                free(buffer.data);                                                                                                                            // 数据发送完后释放缓存
+                if (sendBytes == SOCKET_ERROR)
+                {
+                    printf("sendto failed: %d\n", WSAGetLastError());
+                    WSACleanup();
+                }
+                else
+                    printf("Sent %d bytes to server.\n", sendBytes);
+                return;
+            }
+        }
+        /*若cache未命中，则需要向上级发送包进一步查询*/
+        IdMap mapItem;                             // 声明一个ID转换表
+        mapItem.addr = client_Addr;                // 请求方的地址
+        mapItem.originalId = dnspacket.header->ID; // 请求方的ID
+        mapItem.time = time(NULL) + IDMAP_TIMEOUT; // 设置该记录的过期时间
+        runtime->maxId = setIdMap(runtime->idmap, mapItem, runtime->maxId);
+        dnspacket.header->ID = runtime->maxId;
+        // 发走
+        if (runtime->config.debug)
+        {
+            printf("Send packet to upstream\n");
+            DNSPacket_print(&dnspacket);
+        }
+        buffer = DNSPacket_encode(dnspacket);
+        DNSPacket_destroy(dnspacket);
+        status = sendto(runtime->client, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&runtime->upstream_addr, sizeof(runtime->upstream_addr));
+        free(buffer.data);
+        if (status < 0)
+        {
+            printf("Error sendto: %d\n", WSAGetLastError());
+        }
     }
 }
 
@@ -723,35 +749,37 @@ void loop(DNS_RUNTIME *runtime)
         tv.tv_usec = 0;
         // 检查是否有就绪的文件描述符（即有数据可读）
         int ready = select(0, &readfds, NULL, NULL, &tv);
-        if (runtime->quit == 1) {
+        if (runtime->quit == 1)
+        {
             return;
         }
-        if (ready == -1) {
-        int ready = select(0, &readfds, NULL, NULL, &tv);
-        if (runtime->quit == 1) // 程序退出
-            return;
         if (ready == -1)
         {
-            printf("Error in select\n");
-        }
-        else if (ready == 0)
-        {
-            printf("Timeout occurred!\n");
-        }
-        else
-        {
-            if (FD_ISSET(runtime->server, &readfds))
-            { // 接受请求的socket可读，进行处理
-                HandleFromClient(runtime);
+            int ready = select(0, &readfds, NULL, NULL, &tv);
+            if (runtime->quit == 1) // 程序退出
+                return;
+            if (ready == -1)
+            {
+                printf("Error in select\n");
             }
-            if (FD_ISSET(runtime->client, &readfds))
-            { // 与上级连接的socket可读,进行处理
-                HandleFromUpstream(runtime);
+            else if (ready == 0)
+            {
+                printf("Timeout occurred!\n");
+            }
+            else
+            {
+                if (FD_ISSET(runtime->server, &readfds))
+                { // 接受请求的socket可读，进行处理
+                    HandleFromClient(runtime);
+                }
+                if (FD_ISSET(runtime->client, &readfds))
+                { // 与上级连接的socket可读,进行处理
+                    HandleFromUpstream(runtime);
+                }
             }
         }
     }
 }
-
 /**
  * 初始化长度为len的buffer
  */
@@ -797,12 +825,12 @@ DNS_PKT DNSPacket_decode(Buffer *buffer)
     /* Questions */
     packet.question = (DNS_QUESTION *)malloc(sizeof(DNS_QUESTION) * packet.header->QDCOUNT);
     size_t i;
-    if (packet.header->QDCOUNT!=1)//问题数量大于1
-        {
-            buffer->length = 0;
-            packet=init_DNSpacket();
-            return packet;//返回一个空包
-        }
+    if (packet.header->QDCOUNT != 1) // 问题数量大于1
+    {
+        buffer->length = 0;
+        packet = init_DNSpacket();
+        return packet; // 返回一个空包
+    }
     packet.question[0].name[0] = (char *)malloc((strlen(Rdata_ptr)) * sizeof(char));
     Rdata_ptr = getURL(Rdata_ptr, packet.question[0].name);
     packet.question[0].Qtype = (uint16_t)(Rdata_ptr[0] << 8) + Rdata_ptr[1];
@@ -832,11 +860,11 @@ DNS_PKT DNSPacket_decode(Buffer *buffer)
             memcpy(packet.answer->rdata, Rdata_ptr, packet.answer->rdlength);
             Rdata_ptr += packet.answer->rdlength;
 
-            if (Rdata_ptr > buffer->data + buffer->length+1)//指针越界
+            if (Rdata_ptr > buffer->data + buffer->length + 1) // 指针越界
             {
                 buffer->length = 0;
-                packet=init_DNSpacket();
-                return packet;//返回一个空包
+                packet = init_DNSpacket();
+                return packet; // 返回一个空包
             }
         }
     }
@@ -919,9 +947,9 @@ uint32_t *getURL(char *name_ptr, char *res)
 {
     assert(name_ptr); // 确认传入的指针不为空
     assert(res);
-    int len = strlen(name_ptr);//计算该域名的长度
-    int idx = 0;            // 在dns包内域名字符下标
-    int bias = name_ptr[0]; // 决定接下来复制字符数量
+    int len = strlen(name_ptr); // 计算该域名的长度
+    int idx = 0;                // 在dns包内域名字符下标
+    int bias = name_ptr[0];     // 决定接下来复制字符数量
     int i = 1;
     while (i < len)
     {
@@ -931,7 +959,7 @@ uint32_t *getURL(char *name_ptr, char *res)
             idx++;
             i++;
         }
-        bias = name_ptr[i];//计算该域名下一段的长度
+        bias = name_ptr[i]; // 计算该域名下一段的长度
         if (bias == 0 || i >= len)
             break;
         i++;
@@ -945,21 +973,25 @@ uint32_t *getURL(char *name_ptr, char *res)
 /**
  * 解析域名（将点分十进制换为buffer模式）
  */
-uint8_t *toQname(char *name, char * data)
+uint8_t *toQname(char *name, char *data)
 {
     int i, j = 0, length = 0;
-    for (i = 0; i < strlen(name); i++) {
-        if (name[i] == '.') {
-        data[j] = length;
-        length = 0;
-        j = i + 1;
-    } else {
-        length++;
-        data[i + 1] = name[i];
+    for (i = 0; i < strlen(name); i++)
+    {
+        if (name[i] == '.')
+        {
+            data[j] = length;
+            length = 0;
+            j = i + 1;
+        }
+        else
+        {
+            length++;
+            data[i + 1] = name[i];
+        }
     }
-    } 
-    return data+strlen(name)+1;
-} 
+    return data + strlen(name) + 1;
+}
 /**
  * 解析数据包时指针的移动和读取指定长度的数据
  */
@@ -995,21 +1027,25 @@ uint8_t *_write8(uint8_t *ptr, uint8_t value)
 }
 
 /* 寻找空闲会话id */
-uint16_t setIdMap(IdMap *idMap, IdMap item, uint16_t curMaxId) {
+uint16_t setIdMap(IdMap *idMap, IdMap item, uint16_t curMaxId)
+{
     uint16_t originId = curMaxId; // 暂存上次向上级发出查询请求时的会话id
-    time_t t = time(NULL); // 将t设为当前时间
-    while (idMap[curMaxId].time >= t) { // 从上次的会话id开始，寻找空闲id，若过期时间大于当前时间说明id正在被占用
-        curMaxId++; // 若当前id正在被占用，则id++，查看下一个id是否可用
+    time_t t = time(NULL);        // 将t设为当前时间
+    while (idMap[curMaxId].time >= t)
+    {                            // 从上次的会话id开始，寻找空闲id，若过期时间大于当前时间说明id正在被占用
+        curMaxId++;              // 若当前id正在被占用，则id++，查看下一个id是否可用
         curMaxId %= (MAXID + 1); // 防止id号超过65535
-        if (curMaxId == originId) { // 如果找了一整圈，回到起始的id，说明所有id都被占用，无可用的id号
+        if (curMaxId == originId)
+        {              // 如果找了一整圈，回到起始的id，说明所有id都被占用，无可用的id号
             return -1; // id分配失败
         }
     }
     idMap[curMaxId % (MAXID + 1)] = item; // 将runtime中的idMap数组的信息更新
-    return curMaxId % (MAXID + 1); // 将当前空闲id设为本次向上游服务器发出请求的id
+    return curMaxId % (MAXID + 1);        // 将当前空闲id设为本次向上游服务器发出请求的id
 }
 
-IdMap getIdMap(IdMap *idMap, uint16_t i){
+IdMap getIdMap(IdMap *idMap, uint16_t i)
+{
     idMap[i].time = 0; // 归还原来的会话id，把过期时间还原为0
-    return idMap[i]; // 返回会话id对应的idMap项
+    return idMap[i];   // 返回会话id对应的idMap项
 }
