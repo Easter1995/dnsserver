@@ -132,7 +132,7 @@ void cache_add_one(char *name, uint32_t ip, uint32_t ttl)
 /**
  * 查找一条cache并返回ip，若找到，其余未命中cache的count++
  */
-bool cache_search(char *name, uint32_t *ip_array)
+bool cache_search(char *name, uint32_t *ip_array, int *actual_ip_cnt)
 {
     bool ret = false;
     uint32_t hit_cnt = 0;  // 命中节点的计数器值
@@ -182,6 +182,7 @@ bool cache_search(char *name, uint32_t *ip_array)
             }
         }
         ReleaseMutex(cache_list.lock); // 释放互斥量
+        *actual_ip_cnt = ip_count;
         break;
     case WAIT_ABANDONED:
         // 互斥量已被放弃

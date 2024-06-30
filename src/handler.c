@@ -141,7 +141,8 @@ unsigned __stdcall worker_thread(void *arg)
                     return 0;
                 }
                 // 先在本地cache中搜索
-                bool find_result = cache_search(dnspacket.question->name, &target_ip);
+                int actual_ip_cnt = 0;
+                bool find_result = cache_search(dnspacket.question->name, target_ip, &actual_ip_cnt);
                 if (find_result)
                 { // 若在cache中查询到了结果
                     if (runtime->config.debug)
