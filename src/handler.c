@@ -638,7 +638,7 @@ Buffer makeBuffer(int len)
 
 /**
  * 实现buffer向DNS包的转换
- */
+ */ 
 DNS_PKT DNSPacket_decode(Buffer *buffer)
 {
     DNS_PKT packet;
