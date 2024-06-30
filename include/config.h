@@ -56,4 +56,10 @@ IdMap getIdMap(IdMap *idMap, uint16_t i);
 
 uint16_t setIdMap(IdMap *idMap, IdMap item, uint16_t curMaxId);
 
+/* 运行时 */
+DNS_RUNTIME runtime;
+
+/* 配置 */
+DNS_CONFIG config;
+
 #endif

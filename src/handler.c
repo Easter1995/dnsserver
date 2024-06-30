@@ -187,7 +187,6 @@ unsigned __stdcall worker_thread(void *arg)
                 buffer = DNSPacket_encode(dnspacket);
                 DNSPacket_destroy(dnspacket);
                 int status = sendto(runtime->client, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&runtime->upstream_addr, sizeof(runtime->upstream_addr));
-                free(buffer.data);
                 if (status < 0)
                 {
                     printf("Error sendto: %d\n", WSAGetLastError());
@@ -228,6 +227,15 @@ DNS_PKT init_DNSpacket()
 {
     DNS_PKT packet;
     packet.header=(DNS_HEADER*)malloc(sizeof(DNS_HEADER));
+    packet.header->AA=0;
+    packet.header->ID=0;
+    packet.header->Opcode=0;
+    packet.header->RA=0;
+    packet.header->Rcode=0;
+    packet.header->RD=0;
+    packet.header->TC=0;
+    packet.header->Z=0;
+    packet.header->QR=0;
     packet.answer = NULL;
     packet.question = NULL;
     packet.additional = NULL;

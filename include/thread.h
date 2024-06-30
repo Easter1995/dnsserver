@@ -8,6 +8,7 @@
 #include "list.h"
 #include "dns.h"
 #include "handler.h"
+#include "config.h"
 
 // #define THREAD_COUNT_LOW  2    // 低任务量
 // #define THREAD_COUNT_MEDIUM  4 // 中等任务量

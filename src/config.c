@@ -9,7 +9,7 @@ DNS_CONFIG config_init(int argc, char *argv[]) {
     config.debug = FALSE;
     config.port = 53;
     // 默认上游服务器IP
-    strcpy(config.upstream_server_IP, "10.3.9.4");
+    strcpy(config.upstream_server_IP, "10.3.9.5");
 
     for (int i = 0; i < argc; i++) {
         if (strcmp("-u", argv[i]) == 0) {
