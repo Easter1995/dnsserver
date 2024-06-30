@@ -27,7 +27,9 @@ DNS_CONFIG config_init(int argc, char *argv[]) {
     }
     return config;
 }
-
+/**
+ * 运行时初始化
+ */
 DNS_RUNTIME runtime_init(DNS_CONFIG *config) {
     DNS_RUNTIME runtime;
     runtime.config = *config;
@@ -36,6 +38,20 @@ DNS_RUNTIME runtime_init(DNS_CONFIG *config) {
     runtime.maxId = 0;
     runtime.totalCount = 0;
     return runtime;
+}
+
+/**
+ * 运行时销毁
+ */
+void destroyRuntime(DNS_RUNTIME *runtime) {
+    if (runtime->quit > 0) {
+        // 退出已经处理完成了，无需再处理
+        return;
+    }
+    runtime->quit = 1;
+    closesocket(runtime->server);
+    closesocket(runtime->client);
+    free(runtime->idmap);
 }
 
 /* IDMap的初始化 */

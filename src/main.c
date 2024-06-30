@@ -15,6 +15,7 @@ DNS_CONFIG config;
 BOOL WINAPI console_handler(DWORD signal)
 {
     printf("Quitting...\n");
+    
     /* 销毁运行时 */
     destroyRuntime(&runtime);
 
@@ -69,6 +70,9 @@ int main(int argc, char **argv)
 
     /* 销毁线程池，销毁请求队列 */
     destroy_thread_pool();
+
+    /* 销毁运行时 */
+    destroyRuntime(&runtime);
 
     /* 程序退出 */
     WSACleanup();

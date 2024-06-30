@@ -28,6 +28,7 @@ typedef struct Request{
  */
 typedef struct {
     struct list_head head; // 链表头
+    int queue_len;    // 任务队列长度
     HANDLE mutex;          // 互斥锁
     HANDLE cond;           // 条件变量
 } RequestQueue;

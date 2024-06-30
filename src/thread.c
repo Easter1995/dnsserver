@@ -50,7 +50,7 @@ void adjust_thread_pool()
     WaitForSingleObject(thread_pool.mutex, INFINITE);
 
     // 根据任务队列的长度调整线程数据
-    int queue_size = list_empty(&thread_pool.request_queue.head) ? 0 : list_size(&thread_pool.request_queue.head);
+    int queue_size = list_empty(&thread_pool.request_queue.head) ? 0 : thread_pool.request_queue.queue_len;
     int desired_threads;
     if (queue_size <= 0)
     {
@@ -119,6 +119,7 @@ Request *dequeue_task(Request *request)
 void init_request_queue(RequestQueue *queue)
 {
     INIT_LIST_HEAD(&queue->head);                        // 初始化链表头
+    queue->queue_len = 0;
     queue->mutex = CreateMutex(NULL, FALSE, NULL);       // 创建互斥锁
     queue->cond = CreateEvent(NULL, FALSE, FALSE, NULL); // 创建条件变量
 }
@@ -132,6 +133,7 @@ void enqueue_request(RequestQueue *queue, struct sockaddr_in client_addr, DNS_PK
     request->client_addr = client_addr;                    // 设置客户端地址
     request->buffer = buffer;                              // 设置数据缓冲区
     request->dns_packet = pkt;                             // 设置接收到的dns包
+    queue->queue_len++;                                    // 队列长度++
     INIT_LIST_HEAD(&request->list);                        // 初始化链表节点
 
     WaitForSingleObject(queue->mutex, INFINITE); // 获取锁
@@ -143,7 +145,7 @@ void enqueue_request(RequestQueue *queue, struct sockaddr_in client_addr, DNS_PK
 /**
  * 从任务队列获取任务
  */
-Request *dequeue_request(RequestQueue *queue)
+Request* dequeue_request(RequestQueue *queue)
 {
     WaitForSingleObject(queue->mutex, INFINITE); // 加锁
 
@@ -155,6 +157,7 @@ Request *dequeue_request(RequestQueue *queue)
         WaitForSingleObject(queue->mutex, INFINITE); // 再次加锁
     }
     struct list_head *pos = queue->head.next; // 获取队列头部的节点
+    queue->queue_len--;
     list_del(pos);                            // 从队列中删除
     ReleaseMutex(queue->mutex);               // 解锁
 

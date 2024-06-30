@@ -47,6 +47,9 @@ DNS_CONFIG config_init(int argc, char *argv[]);
 /* 初始化运行时 */
 DNS_RUNTIME runtime_init(DNS_CONFIG *config);
 
+/* 销毁运行时 */
+void destroyRuntime(DNS_RUNTIME *runtime);
+
 IdMap *initIdMap();
 
 IdMap getIdMap(IdMap *idMap, uint16_t i);
