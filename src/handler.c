@@ -154,14 +154,14 @@ unsigned __stdcall worker_thread(void* arg) {
                 }
             }
 
-            // 如果cache未命中，则向上级服务器查询
-            IdMap mapItem;
-            mapItem.addr = client_addr;
-            mapItem.originalId = dnspacket.header->ID;
-            mapItem.time = time(NULL) + IDMAP_TIMEOUT;
-            runtime->maxId = setIdMap(runtime->idmap, mapItem, runtime->maxId);
-            dnspacket.header->ID = runtime->maxId;
-            runtime->maxId = (runtime->maxId + 1) % UINT16_MAX;
+            /* 如果cache未命中，则向上级服务器查询 */
+            IdMap mapItem; // 创建一个新idMap项，用于设置向上级服务器查询的会话id
+            mapItem.addr = client_addr; // 设置该次会话id项对应的客户端地址
+            mapItem.originalId = dnspacket.header->ID; // 设置该次会话id项对应的 请求方客户端发来的DNS报文的会话id
+            mapItem.time = time(NULL) + IDMAP_TIMEOUT; // 设置该次会话id的过期时间
+            runtime->maxId = setIdMap(runtime->idmap, mapItem, runtime->maxId); // 分配id号
+            dnspacket.header->ID = runtime->maxId; // 将setIdMap寻找到的空闲id设为本次向上游服务器发出请求的id
+            runtime->maxId = (runtime->maxId + 1) % UINT16_MAX; //???
             buffer = DNSPacket_encode(dnspacket);
             DNSPacket_destroy(dnspacket);
             struct sockaddr_in upstreamAddr = runtime->upstream_addr;
@@ -599,7 +599,7 @@ void HandleFromUpstream(DNS_RUNTIME *runtime){
     int status = 0;
     DNS_PKT packet = recvPacket(runtime, runtime->client, &buffer, &runtime->upstream_addr, &status);
     if (status <= 0) {
-        // 接收失败 ———— 空包，甚至不需要destroy。
+        // 接收失败 ———— 空包，甚至不需要destroy
         free(buffer.data);
         return;
     }
@@ -629,7 +629,7 @@ void HandleFromUpstream(DNS_RUNTIME *runtime){
     if (packet.header->Rcode != OK || !checkCacheable(packet.question->Qtype) || packet.header->ANCOUNT < 1) {
         shouldCache = 0;// 若在查询中指定域名不存在，或不可checkCache，或上游服务器应答中answer数量<1，则不缓存
     }
-    if (shouldCache) {
+    if (shouldCache) { 
         // 进缓存
         Key cacheKey;
         cacheKey.qtype = packet.question->Qtype;
@@ -868,6 +868,7 @@ DNS_PKT DNSPacket_decode(Buffer *buffer) {
         }
     } else {
         packet.answer = NULL;
+    }
 }
 
 /**
@@ -959,19 +960,22 @@ uint8_t *_write8(uint8_t *ptr, uint8_t value) {
     return ptr + 1;
 }
 
-/**
- * IDMap的初始化
- */
-int setIdMap(IdMap *idMap, IdMap item, uint16_t curMaxId) {
-    uint16_t originId = curMaxId;
-    time_t t = time(NULL);
-    while (idMap[curMaxId].time >= t) {
-        curMaxId++;
-        curMaxId %= MAXID;
-        if (curMaxId == originId) {
-            return -1;
+/* 寻找空闲会话id */
+uint16_t setIdMap(IdMap *idMap, IdMap item, uint16_t curMaxId) {
+    uint16_t originId = curMaxId; // 暂存上次向上级发出查询请求时的会话id
+    time_t t = time(NULL); // 将t设为当前时间
+    while (idMap[curMaxId].time >= t) { // 从上次的会话id开始，寻找空闲id，若过期时间大于当前时间说明id正在被占用
+        curMaxId++; // 若当前id正在被占用，则id++，查看下一个id是否可用
+        curMaxId %= (MAXID + 1); // 防止id号超过65535
+        if (curMaxId == originId) { // 如果找了一整圈，回到起始的id，说明所有id都被占用，无可用的id号
+            return -1; // id分配失败
         }
     }
-    idMap[curMaxId] = item;
-    return curMaxId % MAXID;
+    idMap[curMaxId % (MAXID + 1)] = item; // 将runtime中的idMap数组的信息更新
+    return curMaxId % (MAXID + 1); // 将当前空闲id设为本次向上游服务器发出请求的id
+}
+
+IdMap getIdMap(IdMap *idMap, uint16_t i){
+    idMap[i].time = 0; // 归还原来的会话id，把过期时间还原为0
+    return idMap[i]; // 返回会话id对应的idMap项
 }

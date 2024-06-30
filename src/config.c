@@ -37,3 +37,12 @@ DNS_RUNTIME runtime_init(DNS_CONFIG *config) {
     runtime.totalCount = 0;
     return runtime;
 }
+
+/* IDMap的初始化 */
+IdMap *initIdMap(){
+    IdMap *idmap = (IdMap *)malloc(sizeof(IdMap) * (MAXID + 1)); // 为0-65535共65536个id的IdMap分配空间
+    for(int i=0; i <= MAXID; i++){
+        idmap[i].time = 0; // 把每一个id的过期时间初始化为0
+    }
+    return idmap;
+}

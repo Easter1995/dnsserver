@@ -48,6 +48,6 @@ IdMap *initIdMap();
 
 IdMap getIdMap(IdMap *idMap, uint16_t i);
 
-int setIdMap(IdMap *idMap, IdMap item, uint16_t curMaxId);
+uint16_t setIdMap(IdMap *idMap, IdMap item, uint16_t curMaxId);
 
 #endif
