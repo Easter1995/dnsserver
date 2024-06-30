@@ -117,7 +117,7 @@ unsigned __stdcall worker_thread(void *arg)
                 // 拦截不良网站
                 if (trie_search(dnspacket.question->name, &target_ip))
                 {
-                    DNS_PKT answer_Packet = prepare_answerPacket(target_ip, dnspacket);
+                    DNS_PKT answer_Packet = prepare_answerPacket(target_ip, dnspacket,1);
                     if (runtime->config.debug)
                     { // 输出调试信息
                         printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
@@ -145,11 +145,7 @@ unsigned __stdcall worker_thread(void *arg)
                 bool find_result = cache_search(dnspacket.question->name, target_ip, &actual_ip_cnt);
                 if (find_result)
                 { // 若在cache中查询到了结果
-                    if (runtime->config.debug)
-                    { // 打印debug信息
-                        printf("Cache Hint! Expected ip is %d", target_ip);
-                    }
-                    DNS_PKT answer_Packet = prepare_answerPacket(target_ip, dnspacket);
+                    DNS_PKT answer_Packet = prepare_answerPacket(target_ip, dnspacket,actual_ip_cnt);
                     if (runtime->config.debug)
                     { // 输出调试信息
                         printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
@@ -454,17 +450,22 @@ void DNSPacket_print(DNS_PKT *packet)
 /**
  * 生成回应包
  */
-DNS_PKT prepare_answerPacket(uint32_t ip, DNS_PKT packet)
+DNS_PKT prepare_answerPacket(uint32_t* ip, DNS_PKT packet,int ip_count)
 {
+    packet.header->ANCOUNT=ip_count;
     packet.header->RA = 1;
     strcpy(packet.answer->name, packet.question->name);
     packet.header->Rcode = 0;
     packet.header->QR = QRRESPONSE;
     packet.header->ANCOUNT = 1;
-    packet.answer->type = 1;
-    packet.answer->addr_class = 1;
-    packet.answer->rdlength = 4;
-    packet.answer->rdata = ip;
+    packet.answer=(DNS_RECORD *)malloc(sizeof(DNS_RECORD)*ip_count);
+    for(int i=0;i<ip_count;i++)
+    {
+        packet.answer[i].type = 1;
+        packet.answer[i].addr_class = 1;
+        packet.answer[i].rdlength = 4;
+        packet.answer[i].rdata = ip[i];
+    }
     return packet;
 }
 
