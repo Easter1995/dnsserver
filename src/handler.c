@@ -467,6 +467,7 @@ DNS_PKT prepare_answerPacket(uint32_t ip, DNS_PKT packet)
     packet.answer->type = 1;
     packet.answer->addr_class = 1;
     packet.answer->rdlength = 4;
+    packet.answer->rdata=ip;
     return packet;
 }
 
