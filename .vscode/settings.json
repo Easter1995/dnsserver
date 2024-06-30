@@ -20,6 +20,7 @@
         "trie.h": "c",
         "stdlib.h": "c",
         "handler.h": "c",
-        "thread.h": "c"
+        "thread.h": "c",
+        "memory": "c"
     }
 }

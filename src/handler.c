@@ -71,7 +71,7 @@ void socket_init(DNS_RUNTIME *runtime) {
 }
 
 /**
- * 工作线程函数
+ * “消费者”函数
  * 任务是从请求队列里面取出一个请求并处理这个请求
  * 解码DNS包
  * 查看cache是否命中，未命中向上游服务器发出请求
@@ -180,7 +180,7 @@ unsigned __stdcall worker_thread(void* arg) {
 }
 
 /**
- * 主线程函数
+ * “生产者”函数
  * 任务是监听客户端的请求并接受请求
  * 将请求放入请求队列
  */
@@ -199,7 +199,7 @@ void HandleFromClient(DNS_RUNTIME* runtime) {
     timeout.tv_sec = 5;  // 设置超时时间，单位为秒
     timeout.tv_usec = 0;
 
-    // 监视文件描述符集合中的文件描述符是否发生了 I/O 事件
+    // 监视文件描述符集合中的文件描述符是否发生了 I/O 事件，即socket是否有数据可读
     int activity = select(runtime->server + 1, &read_fds, NULL, NULL, &timeout);
 
     // 有事件发生，接受包并且往请求队列添加任务
@@ -674,6 +674,7 @@ void HandleFromUpstream(DNS_RUNTIME *runtime){
 
 /**
  * 循环处理用户请求
+ * 监听和处理两个socket是否有数据可读
  */
 void loop(DNS_RUNTIME* runtime) {
     fd_set readfds;
@@ -684,6 +685,7 @@ void loop(DNS_RUNTIME* runtime) {
         struct timeval tv;
         tv.tv_sec = 5;
         tv.tv_usec = 0;
+        // 检查是否有就绪的文件描述符（即有数据可读）
         int ready = select(0, &readfds, NULL, NULL, &tv);
         if (runtime->quit == 1) {
             return;
