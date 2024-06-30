@@ -84,74 +84,170 @@ void initThreadPool(DNS_RUNTIME *runtime) {
 /**
  * 初始化任务队列
  */
-void initTaskQueue(TaskQueue *queue) {
-    taskQueueNotEmptyEvent = CreateEvent(NULL, FALSE, FALSE, NULL);  // 创建事件对象
-    if (taskQueueNotEmptyEvent == NULL) {
-        perror("Error creating task queue event.");
-        exit(EXIT_FAILURE);
-    }
-
-    INIT_LIST_HEAD(&queue->head);
-    InitializeCriticalSection(&queue->mutex);
-    InitializeConditionVariable(&queue->cond);
-    queue->size = 0;
+void init_request_queue(RequestQueue* queue) {
+    INIT_LIST_HEAD(&queue->head);  // 初始化链表头
+    queue->mutex = CreateMutex(NULL, FALSE, NULL);  // 创建互斥锁
+    queue->cond = CreateEvent(NULL, FALSE, FALSE, NULL);  // 创建条件变量
 }
 
 /**
  * 向任务队列添加任务
  */
-void enqueue(TaskQueue *queue, Task *task) {
-    EnterCriticalSection(&queue->mutex);
-    list_add_tail(&task->list, &queue->head);
-    queue->size++;
-    WakeConditionVariable(&queue->cond);
-    LeaveCriticalSection(&queue->mutex);
-    // 发送任务队列非空的通知
-    SetEvent(taskQueueNotEmptyEvent);
+void enqueue_request(RequestQueue* queue, struct sockaddr_in client_addr, Buffer buffer) {
+    Request* request = (Request*)malloc(sizeof(Request));  // 分配新的请求节点
+    request->client_addr = client_addr;  // 设置客户端地址
+    request->buffer = buffer;  // 设置数据缓冲区
+    INIT_LIST_HEAD(&request->list);  // 初始化链表节点
+
+    WaitForSingleObject(queue->mutex, INFINITE);  // 加锁
+    list_add_tail(&request->list, &queue->head);  // 添加到链表尾部
+    SetEvent(queue->cond);  // 使用条件变量通知等待的线程
+    ReleaseMutex(queue->mutex);  // 解锁
 }
 
 /**
  * 从任务队列获取任务
  */
-Task *dequeue(TaskQueue *queue) {
-    EnterCriticalSection(&queue->mutex);
-    while (queue->size == 0) {
-        SleepConditionVariableCS(&queue->cond, &queue->mutex, INFINITE);
+Request* dequeue_request(RequestQueue* queue) {
+    WaitForSingleObject(queue->mutex, INFINITE);  // 加锁
+
+    // 使用条件变量避免任务队列为空时CPU忙等
+    while (list_empty(&queue->head)) {  // 如果队列为空
+        ReleaseMutex(queue->mutex);  // 先解锁
+        WaitForSingleObject(queue->cond, INFINITE);  // 等待条件变量
+        WaitForSingleObject(queue->mutex, INFINITE);  // 再次加锁
     }
-    Task *task = list_first_entry(&queue->head, Task, list);
-    list_del(&task->list);
-    queue->size--;
-    LeaveCriticalSection(&queue->mutex);
-    return task;
+    struct list_head* pos = queue->head.next;  // 获取队列头部的节点
+    list_del(pos);  // 从队列中删除
+    ReleaseMutex(queue->mutex);  // 解锁
+
+    return list_entry(pos, Request, list);  // 返回请求节点
 }
 
 /**
  * 销毁任务队列
  */
-void destroyTaskQueue(TaskQueue *queue) {
-    DeleteCriticalSection(&queue->mutex);
+void destroy_request_queue(RequestQueue* queue) {
+    CloseHandle(queue->mutex);  // 关闭互斥锁
+    CloseHandle(queue->cond);  // 关闭条件变量
 }
 
 /**
- * 工作线程
+ * 工作线程函数
+ * 任务是从请求队列里面取出一个请求并处理这个请求
+ * 解码DNS包
+ * 查看cache是否命中，未命中向上游服务器发出请求
  */
-DWORD WINAPI workerThread(LPVOID arg) {
-    DNS_RUNTIME *runtime = (DNS_RUNTIME *)arg;
-    while (true) {
-        Task *task = NULL;
-        
-        // 等待任务队列非空的条件
-        WaitForSingleObject(taskQueueNotEmptyEvent, INFINITE);
+unsigned __stdcall worker_thread(void* arg) {
+    DNS_RUNTIME* runtime = (DNS_RUNTIME*)arg;  // 获取运行时
+    while (1) {
+        Request* request = dequeue_request(&request_queue);  // 获取请求
+        if (request) {
+            struct sockaddr_in client_addr = request->client_addr;  // 获取客户端地址
+            Buffer buffer = request->buffer;  // 获取数据缓冲区
 
-        // 线程被唤醒，获取任务
-        task = dequeue(&taskQueue);
-        if (task) {
-            handleClientRequest(runtime, &task->client_addr, &task->buffer);
-            free(task->buffer.data);
-            free(task);
+            // 处理请求的逻辑
+            int status = 0;
+            DNS_PKT dnspacket = DNSPacket_decode(&buffer);  // 解码DNS包
+            if (buffer.length <= 0) {
+                free(buffer.data);
+                free(request);
+                continue;
+            }
+
+            if (dnspacket.header->QR != QRQUERY || dnspacket.header->QDCOUNT < 1) {
+                DNSPacket_destroy(dnspacket);
+                free(buffer.data);
+                free(request);
+                continue;
+            }
+
+            if (dnspacket.header->QDCOUNT > 1) {
+                if (runtime->config.debug) {
+                    printf("Too many questions. \n");
+                }
+                dnspacket.header->QR = QRRESPONSE;
+                dnspacket.header->Rcode = FORMERR;
+                buffer = DNSPacket_encode(dnspacket);
+                DNSPacket_destroy(dnspacket);
+                sendto(runtime->server, (char*)buffer.data, buffer.length, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
+                free(buffer.data);
+                free(request);
+                continue;
+            }
+
+            if (IsCacheable(dnspacket.question->Qtype)) {
+                uint32_t target_ip;
+                bool find_result = cache_search(dnspacket.question->name, &target_ip);
+                if (find_result) {
+                    if (runtime->config.debug) {
+                        printf("Cache Hint! Expected ip is %d", target_ip);
+                    }
+                    DNS_PKT answer_Packet = prepare_answerPacket(target_ip);
+                    if (runtime->config.debug) {
+                        printf("Send packet back to client %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+                        DNSPacket_print(&answer_Packet);
+                        runtime->totalCount++;
+                        printf("TOTAL COUNT %d\n", runtime->totalCount);
+                        printf("CACHE SIZE %d\n", cache_list.list_size);
+                    }
+                    answer_Packet.header->RA = 1;
+                    buffer = DNSPacket_encode(answer_Packet);
+                    DNSPacket_destroy(answer_Packet);
+                    int sendBytes = sendto(runtime->server, (char*)buffer.data, buffer.length, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
+                    free(buffer.data);
+                    free(request);
+                    if (sendBytes == SOCKET_ERROR) {
+                        printf("sendto failed: %d\n", WSAGetLastError());
+                        WSACleanup();
+                    } else {
+                        printf("Sent %d bytes to server.\n", sendBytes);
+                    }
+                    continue;
+                }
+            }
+
+            // 如果cache未命中，则向上级服务器查询
+            IdMap mapItem;
+            mapItem.addr = client_addr;
+            mapItem.originalId = dnspacket.header->ID;
+            mapItem.time = time(NULL) + IDMAP_TIMEOUT;
+            runtime->maxId = setIdMap(runtime->idmap, mapItem, runtime->maxId);
+            dnspacket.header->ID = runtime->maxId;
+            runtime->maxId = (runtime->maxId + 1) % UINT16_MAX;
+            buffer = DNSPacket_encode(dnspacket);
+            DNSPacket_destroy(dnspacket);
+            struct sockaddr_in upstreamAddr = runtime->upstream_addr;
+            int sendBytes = sendto(runtime->client, (char*)buffer.data, buffer.length, 0, (struct sockaddr*)&upstreamAddr, sizeof(upstreamAddr));
+            if (sendBytes == SOCKET_ERROR) {
+                printf("sendto failed: %d\n", WSAGetLastError());
+                WSACleanup();
+            } else {
+                printf("Sent %d bytes to upstream server.\n", sendBytes);
+            }
+            free(buffer.data);
+            free(request);
         }
     }
     return 0;
+}
+
+/**
+ * 主线程函数
+ * 任务是监听客户端的请求并接受请求
+ * 将请求放入请求队列
+ */
+void HandleFromClient(DNS_RUNTIME* runtime) {
+    Buffer buffer = makeBuffer(DNS_PACKET_SIZE);  // 创建缓冲区
+    struct sockaddr_in client_Addr;
+    int status = 0;
+    DNS_PKT dnspacket = recvPacket(runtime, runtime->server, &buffer, &client_Addr, &status);  // 接收数据包
+    if (status <= 0) {
+        free(buffer.data);
+        return;
+    }
+
+    enqueue_request(&request_queue, client_Addr, buffer);  // 将请求放入队列
 }
 
 /**
@@ -612,27 +708,28 @@ void HandleFromUpstream(DNS_RUNTIME *runtime){
 /**
  * 循环处理用户请求
  */
-void loop(DNS_RUNTIME *runtime) {
+void loop(DNS_RUNTIME* runtime) {
     fd_set readfds;
-    while(1){
-        FD_ZERO(&readfds);// 初始化 readfds，清空文件描述符集合
-        FD_SET(runtime->server, &readfds);//添加 server 到 readfds 中
-        FD_SET(runtime->client,&readfds);//添加 client 到 readfds 中
+    while (1) {
+        FD_ZERO(&readfds);
+        FD_SET(runtime->server, &readfds);
+        FD_SET(runtime->client, &readfds);
         struct timeval tv;
-        tv.tv_sec = 5;  // 设置超时时间为 5 秒
+        tv.tv_sec = 5;
         tv.tv_usec = 0;
-        int ready=select(0,&readfds,NULL,NULL,&tv);
-        if(runtime->quit==1)//程序退出
-        return;
-        if(ready==-1){
+        int ready = select(0, &readfds, NULL, NULL, &tv);
+        if (runtime->quit == 1) {
+            return;
+        }
+        if (ready == -1) {
             printf("Error in select\n");
-        }else if(ready==0){
+        } else if (ready == 0) {
             printf("Timeout occurred!\n");
-        }else{
-            if(FD_ISSET(runtime->server,&readfds)){//接受请求的socket可读，进行处理
+        } else {
+            if (FD_ISSET(runtime->server, &readfds)) {
                 HandleFromClient(runtime);
             }
-            if(FD_ISSET(runtime->client,&readfds)){//与上级连接的socket可读,进行处理
+            if (FD_ISSET(runtime->client, &readfds)) {
                 HandleFromUpstream(runtime);
             }
         }
