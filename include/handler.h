@@ -1,19 +1,19 @@
 /* 处理网络连接相关以及请求处理 */
 #ifndef HANDLER_H
 #define HANDLER_H
-#include <winsock2.h>
-#include <ws2tcpip.h>
+#include <WS2tcpip.h>
+#include <WinSock2.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <time.h>
 #include <process.h>
-#include <winsock2.h>
 #include "list.h"
 #include "dns.h"
 #include "thread.h"
 #include "config.h"
+#include "resource.h"
 
 #pragma comment(lib, "ws2_32.lib")
 

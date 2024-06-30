@@ -21,6 +21,7 @@
         "stdlib.h": "c",
         "handler.h": "c",
         "thread.h": "c",
-        "memory": "c"
+        "memory": "c",
+        "xutility": "c"
     }
 }

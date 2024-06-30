@@ -1,10 +1,4 @@
 #include "handler.h"
-#include "config.h"
-#include "resource.h"
-#include "list.h"
-#include <WS2tcpip.h>
-#include <WinSock2.h>
-#include <stdio.h>
 
 /**
  * 初始化socket
@@ -67,14 +61,17 @@ void socket_init(DNS_RUNTIME *runtime)
     runtime->upstream_addr.sin_port = htons(default_port); // 默认使用53号端口
 
     // 将点分十进制形式的 IP 地址转换为网络字节序的二进制形式
-    if (inet_pton(AF_INET, runtime->config.upstream_server_IP, &runtime->upstream_addr.sin_addr) <= 0)
+    struct sockaddr_in sa;
+    int sa_len = sizeof(sa);
+    if (WSAStringToAddressA(runtime->config.upstream_server_IP, AF_INET, NULL, (struct sockaddr *)&sa, &sa_len) != 0)
     {
-        printf("ERROR: inet_pton failed\n");
+        printf("ERROR: WSAStringToAddressA failed\n");
         closesocket(runtime->server);
         closesocket(runtime->client);
         WSACleanup();
         exit(-1);
     }
+    runtime->upstream_addr.sin_addr = sa.sin_addr;
 }
 
 /**
@@ -113,11 +110,11 @@ unsigned __stdcall worker_thread(void *arg)
             }
             if (dnspacket.question->Qtype == 1)
             { // 只有当请求的资源类型为ipv4时，服务器做出回应
-                uint32_t target_ip[MAX_IP_COUNT];
+                uint32_t wrong_ip[1];
                 // 拦截不良网站
-                if (trie_search(dnspacket.question->name, &target_ip))
+                if (trie_search(dnspacket.question->name, &wrong_ip[0]))
                 {
-                    DNS_PKT answer_Packet = prepare_answerPacket(target_ip, dnspacket,1);
+                    DNS_PKT answer_Packet = prepare_answerPacket(wrong_ip, dnspacket, 1);
                     if (runtime->config.debug)
                     { // 输出调试信息
                         printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
@@ -142,10 +139,11 @@ unsigned __stdcall worker_thread(void *arg)
                 }
                 // 先在本地cache中搜索
                 int actual_ip_cnt = 0;
+                uint32_t target_ip[MAX_IP_COUNT];
                 bool find_result = cache_search(dnspacket.question->name, target_ip, &actual_ip_cnt);
                 if (find_result)
                 { // 若在cache中查询到了结果
-                    DNS_PKT answer_Packet = prepare_answerPacket(target_ip, dnspacket,actual_ip_cnt);
+                    DNS_PKT answer_Packet = prepare_answerPacket(target_ip, dnspacket, actual_ip_cnt);
                     if (runtime->config.debug)
                     { // 输出调试信息
                         printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
@@ -438,21 +436,29 @@ void DNSPacket_print(DNS_PKT *packet)
 /**
  * 生成回应包
  */
-DNS_PKT prepare_answerPacket(uint32_t* ip, DNS_PKT packet,int ip_count)
+DNS_PKT prepare_answerPacket(uint32_t *ip, DNS_PKT packet, int ip_count)
 {
-    packet.header->ANCOUNT=ip_count;
+    packet.answer = (DNS_RECORD *)malloc(sizeof(DNS_RECORD) * ip_count);
+    packet.header->ANCOUNT = ip_count;
     packet.header->RA = 1;
     strcpy(packet.answer->name, packet.question->name);
-    packet.header->Rcode = 0;
-    packet.header->QR = QRRESPONSE;
-    packet.header->ANCOUNT = 1;
-    packet.answer=(DNS_RECORD *)malloc(sizeof(DNS_RECORD)*ip_count);
-    for(int i=0;i<ip_count;i++)
+    if (ip[0] == 0)
     {
-        packet.answer[i].type = 1;
-        packet.answer[i].addr_class = 1;
-        packet.answer[i].rdlength = 4;
-        packet.answer[i].rdata = ip[i];
+        packet.header->Rcode = 3;
+        packet.answer = NULL;
+    }
+    else
+    {
+        packet.header->Rcode = 0;
+        packet.header->QR = QRRESPONSE;
+        packet.header->ANCOUNT = 1;
+        for (int i = 0; i < ip_count; i++)
+        {
+            packet.answer[i].type = 1;
+            packet.answer[i].addr_class = 1;
+            packet.answer[i].rdlength = 4;
+            packet.answer[i].rdata = ip[i];
+        }   
     }
     return packet;
 }
@@ -510,7 +516,7 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
         free(buffer.data);
         return;
     }
-    IdMap client = getIdMap(runtime->idmap, packet.header->ID); // 这步是？
+    IdMap client = getIdMap(runtime->idmap, packet.header->ID); 
     packet.header->ID = client.originalId;                      // 还原id
     /*将接收到的上游应答 发送回客户端*/
     if (runtime->config.debug)
@@ -542,53 +548,22 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
     }
     if (shouldCache)
     {
-        // 进缓存
-        Key cacheKey;
-        cacheKey.qtype = packet.question->Qtype;
-        strcpy_s(cacheKey.name, 256, packet.question->name); // 为什么不用strcpy？// 把上游响应的域名设为Cache关键字
-        MyData cacheItem;
-        cacheItem.time = time(NULL);
-        cacheItem.answerCount = packet.header->ANCOUNT;
-        cacheItem.answers = (DNS_RECORD *)malloc(sizeof(DNS_RECORD) * packet.header->ANCOUNT);
-        /*准备缓存项*/
-        for (uint16_t i = 0; i < packet.header->ANCOUNT; i++)
-        {
-            DNS_RECORD *newRecord = &cacheItem.answers[i];
-            DNS_RECORD *old = &packet.answer[i];
-            newRecord->TTL = old->TTL;
-            newRecord->type = old->type;
-            newRecord->addr_class = old->addr_class;
-            strcpy_s(newRecord->name, 256, old->name);
-            if (strlen(old->name))
-            {
-                newRecord->rdata = (char *)malloc(sizeof(char) * 256);
-                strcpy_s(newRecord->name, 256, old->name);
-                toQname(old->name, newRecord->rdata);
-                newRecord->rdlength = (uint16_t)strnlen_s(newRecord->rdata, 256) + 1;
-            }
-            else
-            {
-                newRecord->rdlength = old->rdlength;
-                newRecord->rdata = (char *)malloc(sizeof(char) * newRecord->rdlength);
-                memcpy(newRecord->rdata, old->rdata, newRecord->rdlength);
-                newRecord->name[0] = '\0';
+        // 逐个缓存条目
+        for (uint16_t i = 0; i < packet.header->ANCOUNT; i++) {
+            if(packet.answer[i].type == A) { // 如果回答的类型是ipv4地址
+                cache_add_one(packet.answer[i].name, *packet.answer[i].rdata, packet.answer[i].TTL); // 向cache中存储该条域名-ip数据
             }
         }
-        // lRUCachePut(runtime->Cache, cacheKey, cacheItem); //写入缓存
-        writeCache(runtime->config.cachefile, runtime); // 保存cache文件
         if (runtime->config.debug)
         {
             printf("ADDED TO CACHE\n");
         }
     }
-    if (runtime->config.debug)
-    {
-        // printf("CACHE SIZE %d\n", runtime->Cache->size);
-    }
     // 用完销毁
     free(buffer.data);
     DNSPacket_destroy(packet);
 }
+
 
 /**
  * 循环处理用户请求
