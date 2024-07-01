@@ -10,6 +10,7 @@
 #define NAME_LEN 256
 #define IPv4_LEN 16
 #define DNS_PACKET_SIZE 4096
+#define DNS_RECORD_TTL 3600
 
 typedef uint8_t bit;
 typedef enum {
