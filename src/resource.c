@@ -9,7 +9,7 @@ void relay_table_init()
 {
     trie_init();
     // 打开拦截列表文件
-    FILE *fp = fopen("D:\\ComputerNetworking\\dnsserver\\src\\relaylist.dic", "r");
+    FILE *fp = fopen("D:\\dnsserver\\src\\relaylist.dic", "r");
     if (fp == NULL)
     {
         perror("fopen error");
@@ -165,7 +165,7 @@ bool cache_search(char *name, uint32_t *ip_array, int *actual_ip_cnt)
                 hit_cnt = entry->count;
                 if (ip_count < MAX_IP_COUNT)
                 {
-                    ip_array[ip_count] = entry->ip;
+                    ip_array[ip_count] = &entry->ip_list;//随便弄的为了
                     ip_count++;
                 }
                 entry->count = 0;

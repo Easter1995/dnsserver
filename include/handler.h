@@ -17,7 +17,7 @@
 #include "resource.h"
 
 #pragma comment(lib, "ws2_32.lib")
-
+#define DNS_COMPRESSION_POINTER(offset) (0xC000 | (offset))
 /* 初始化客户端和服务端的socket */
 void socket_init(DNS_RUNTIME *runtime);
 
