@@ -115,11 +115,11 @@ unsigned __stdcall worker_thread(void *arg)
             }
             if (dnspacket.question->Qtype == 1)
             { // 只有当请求的资源类型为ipv4时，服务器做出回应
-                uint32_t wrong_ip[1];
-                // 拦截不良网站
-                if (trie_search(dnspacket.question->name, &wrong_ip[0]))
+                uint32_t found_ip;
+                // 先在本地relaylist中查找
+                if (trie_search(dnspacket.question->name, &found_ip))
                 {
-                    DNS_PKT answer_Packet = prepare_answerPacket(wrong_ip, dnspacket, 1);
+                    DNS_PKT answer_Packet = prepare_answerPacket(found_ip, dnspacket, 1);
                     if (runtime->config.debug)
                     { // 输出调试信息
                         printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
@@ -142,7 +142,7 @@ unsigned __stdcall worker_thread(void *arg)
                         printf("Sent %d bytes to server.\n", sendBytes);
                     return 0;
                 }
-                // 先在本地cache中搜索
+                // 再在cache中搜索
                 int actual_ip_cnt = 0;
                 uint32_t target_ip[MAX_IP_COUNT];
                 bool find_result = cache_search(dnspacket.question->name, target_ip, &actual_ip_cnt);
@@ -466,7 +466,7 @@ DNS_PKT prepare_answerPacket(uint32_t *ip, DNS_PKT packet, int ip_count)
     packet.header->ANCOUNT = ip_count;
     packet.header->RA = 1;
     strcpy(packet.answer->name, packet.question->name);
-    if (ip[0] == 0)
+    if (ip == 0)
     {
         packet.header->ANCOUNT = 0;
         packet.header->Rcode = 3;
@@ -568,8 +568,8 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
         runtime->totalCount++;
         printf("TOTAL COUNT %d\n", runtime->totalCount);
     } // 需要的话，输出调试信息
-    // Buffer buffer_tmp;
-    // buffer_tmp = DNSPacket_encode(packet); // 将上游响应的DNS报文转换为buffer
+     Buffer buffer_tmp;
+     buffer_tmp = DNSPacket_encode(packet); // 将上游响应的DNS报文转换为buffer
 
     // 确认发送数据长度
     // buffer.length = buffer_tmp.length;
@@ -792,22 +792,26 @@ Buffer DNSPacket_encode(DNS_PKT packet)
     data += offset;
     offset = _write16(data, packet.header->ARCOUNT);
     data += offset;
+    uint8_t *question_ptr=data;
     /* Questions */
-    for (int i = 0; i < packet.header->QDCOUNT; i++)
-    {
-        offset = toQname(packet.question[i].name, (char *)data);
-        data += offset;
-        offset = _write16(data, packet.question[i].Qtype);
-        data += offset;
-        offset = _write16(data, packet.question[i].Qclass);
-        data += offset;
-    }
+    offset = toQname(packet.question[0].name, (char *)data);
+    data += offset;
+    offset = _write16(data, packet.question[0].Qtype);
+    data += offset;
+    offset = _write16(data, packet.question[0].Qclass);
+    data += offset;
     /* Answers */
     for (int i = 0; i < packet.header->ANCOUNT; i++)
     {
         //考虑压缩指针问题
-        offset=
-        offset = toQname(packet.answer[i].name, (char *)data);
+        uint16_t new_offset=isFind_repeatDomain((char *)question_ptr,(char *)packet.answer[i].name,(char *)buffer.data);
+        if(offset>=0){
+            int16_t compressed_pointer = DNS_COMPRESSION_POINTER(offset);
+            offset = _write16(data,compressed_pointer);
+        }
+        else {
+            offset = toQname(packet.answer[i].name, (char *)data);
+        }
         data += offset;
         offset = _write16(data + offset, packet.answer[i].type);
         data += offset;
@@ -856,6 +860,16 @@ Buffer DNSPacket_encode(DNS_PKT packet)
     return buffer;
 }
 
+/**
+ * 判断当前域名是否重复,如果重复则返回压缩指针偏移量，否则返回-1
+ */
+int isFind_repeatDomain(char *question_name,char *answer_name,char *start){
+    if(strcmp(answer_name[0],question_name[0])==0)
+    {
+        return question_name-start;
+    }else
+        return -1;
+}
 /**
  * 解析域名（给出点分十进制）
  */
@@ -924,6 +938,7 @@ uint8_t toQname(char *name, char *data)
     data[i + 1] = 0;
     return strlen(name) + 2;
 }
+
 /**
  * 解析数据包时指针的移动和读取指定长度的数据
  */

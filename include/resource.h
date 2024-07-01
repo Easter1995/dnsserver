@@ -10,7 +10,6 @@
 #include "list.h"
 #include "trie.h"
 
-#define MAX_TABLE_LEN 1024
 #define MAX_CACHE_LEN 1024
 #define MAX_IP_COUNT 10
 
