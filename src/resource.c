@@ -9,7 +9,7 @@ void block_table_init()
 {
     trie_init();
     // 打开拦截列表文件
-    FILE *fp = fopen("D:\\ComputerNetworking\\dnsserver\\src\\blocklist.dic", "r");
+    FILE *fp = fopen("D:\\ComputerNetworking\\dnsserver\\src\\relaylist.dic", "r");
     if (fp == NULL)
     {
         perror("fopen error");

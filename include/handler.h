@@ -40,7 +40,7 @@ void HandleFromUpstream(DNS_RUNTIME *runtime);
 Buffer makeBuffer(int len);
 
 /*标准形式转点分十进制*/
-uint32_t *getURL(char *name_ptr, char *res);
+int getURL(char *ptr, char *start, char *newStr);
 
 /*点分十进制转标准形式*/
 uint8_t toQname(char *name, char *data);

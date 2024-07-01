@@ -128,7 +128,7 @@ unsigned __stdcall worker_thread(void *arg)
                         printf("Domain name blocked!\n");
                         printf("TOTAL COUNT %d\n", runtime->totalCount);
                     }
-                    
+
                     buffer = DNSPacket_encode(answer_Packet); // 将DNS包转换为buffer，方便发送
                     DNSPacket_destroy(answer_Packet);
                     int sendBytes = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_Addr, sizeof(client_Addr)); // 由服务器发给客户端找到的ip信息
@@ -147,7 +147,7 @@ unsigned __stdcall worker_thread(void *arg)
                 uint32_t target_ip[MAX_IP_COUNT];
                 bool find_result = cache_search(dnspacket.question->name, target_ip, &actual_ip_cnt);
                 if (find_result)
-                { 
+                {
                     // 若在cache中查询到了结果
                     DNS_PKT answer_Packet = prepare_answerPacket(target_ip, dnspacket, actual_ip_cnt);
                     if (runtime->config.debug)
@@ -236,16 +236,16 @@ void HandleFromClient(DNS_RUNTIME *runtime)
 DNS_PKT init_DNSpacket()
 {
     DNS_PKT packet;
-    packet.header=(DNS_HEADER*)malloc(sizeof(DNS_HEADER));
-    packet.header->AA=0;
-    packet.header->ID=0;
-    packet.header->Opcode=0;
-    packet.header->RA=0;
-    packet.header->Rcode=0;
-    packet.header->RD=0;
-    packet.header->TC=0;
-    packet.header->Z=0;
-    packet.header->QR=0;
+    packet.header = (DNS_HEADER *)malloc(sizeof(DNS_HEADER));
+    packet.header->AA = 0;
+    packet.header->ID = 0;
+    packet.header->Opcode = 0;
+    packet.header->RA = 0;
+    packet.header->Rcode = 0;
+    packet.header->RD = 0;
+    packet.header->TC = 0;
+    packet.header->Z = 0;
+    packet.header->QR = 0;
     packet.answer = NULL;
     packet.question = NULL;
     packet.additional = NULL;
@@ -485,7 +485,7 @@ DNS_PKT prepare_answerPacket(uint32_t *ip, DNS_PKT packet, int ip_count)
         packet.answer[i].addr_class = 1;
         packet.answer[i].rdlength = 4;
         memcpy(packet.answer[i].rdata, &ip_network_order, sizeof(ip_network_order));
-    }   
+    }
     return packet;
 }
 
@@ -506,7 +506,7 @@ DNS_PKT recvPacket(DNS_RUNTIME *runtime, SOCKET socket, Buffer *buffer, struct s
     {                               // 正常接受包
         buffer->length = recvBytes; // 更新buffer长度字段
         *error = recvBytes;         // 给函数调用者的标识
-        DNSPacket_decode(buffer, &packet);  
+        DNSPacket_decode(buffer, &packet);
         // Buffer newbuffer=makeBuffer(DNS_PACKET_SIZE);
         // newbuffer=DNSPacket_encode(packet);
         if (buffer->length == 0)
@@ -537,19 +537,18 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
     Buffer buffer = makeBuffer(DNS_PACKET_SIZE); // 创建一个缓冲区，用于存放将来发送的包的数据
     int status = 0;
     DNS_PKT packet = recvPacket(runtime, runtime->client, &buffer, &runtime->upstream_addr, &status);
-    
+
     if (status <= 0)
     {
         // 接收失败 ———— 空包，甚至不需要destroy。
         free(buffer.data);
         return;
     }
-    IdMap client = getIdMap(runtime->idmap, packet.header->ID); 
+    IdMap client = getIdMap(runtime->idmap, packet.header->ID);
     packet.header->ID = client.originalId; // 还原id
 
     _write16(buffer.data, client.originalId);
-    
-    
+
     /*将接收到的上游应答 发送回客户端*/
     if (runtime->config.debug)
     {
@@ -571,13 +570,13 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
     } // 需要的话，输出调试信息
     // Buffer buffer_tmp;
     // buffer_tmp = DNSPacket_encode(packet); // 将上游响应的DNS报文转换为buffer
-    
+
     // 确认发送数据长度
     // buffer.length = buffer_tmp.length;
 
     // 将上游响应的数据内容存入发送缓冲区
     // memcpy(buffer.data, buffer_tmp.data, buffer_tmp.length);
-    
+
     // free(buffer_tmp.data);
     status = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client.addr, sizeof(client.addr));
     if (status == SOCKET_ERROR)
@@ -589,7 +588,7 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
     {
         printf("Sent %d bytes to client.\n", status);
     }
-    
+
     if (status < buffer.length)
     {
         printf("Error sendto: %d\n", WSAGetLastError());
@@ -603,8 +602,10 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
     if (shouldCache)
     {
         // 逐个缓存条目
-        for (uint16_t i = 0; i < packet.header->ANCOUNT; i++) {
-            if(packet.answer[i].type == A) { // 如果回答的类型是ipv4地址
+        for (uint16_t i = 0; i < packet.header->ANCOUNT; i++)
+        {
+            if (packet.answer[i].type == A)
+            {                                                                                        // 如果回答的类型是ipv4地址
                 cache_add_one(packet.answer[i].name, *packet.answer[i].rdata, packet.answer[i].TTL); // 向cache中存储该条域名-ip数据
             }
         }
@@ -617,8 +618,6 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
     free(buffer.data);
     DNSPacket_destroy(packet);
 }
-
-
 
 /**
  * 循环处理用户请求
@@ -711,7 +710,8 @@ void DNSPacket_decode(Buffer *buffer, DNS_PKT *packet)
         return packet;
     }
     /* Questions */
-    if (packet->header->QDCOUNT > 0) {
+    if (packet->header->QDCOUNT > 0)
+    {
         packet->question = (DNS_QUESTION *)malloc(sizeof(DNS_QUESTION) * packet->header->QDCOUNT);
         size_t i;
         if (packet->header->QDCOUNT != 1) // 问题数量大于1
@@ -721,20 +721,20 @@ void DNSPacket_decode(Buffer *buffer, DNS_PKT *packet)
             return;
         }
         packet->question[0].name[0] = (char *)malloc((strlen(Rdata_ptr)) * sizeof(char));
-        Rdata_ptr = getURL(Rdata_ptr, packet->question[0].name);
+        Rdata_ptr += getURL((char *)Rdata_ptr,(char *)buffer->data, packet->question[0].name);
         packet->question[0].Qtype = (uint16_t)(Rdata_ptr[0] << 8) + Rdata_ptr[1];
         packet->question[0].Qclass = (uint16_t)(Rdata_ptr[2] << 8) + Rdata_ptr[3];
         Rdata_ptr += 4;
     }
     /* Answers */
-    if (packet->header->ANCOUNT>0)
+    if (packet->header->ANCOUNT > 0)
     {
         packet->answer = (DNS_RECORD *)malloc(sizeof(DNS_RECORD) * packet->header->ANCOUNT); // 根据头部记录answer的数量来malloc指定空间
         /*Name*/
         for (int i = 0; i < packet->header->ANCOUNT; i++)
         {
 
-            Rdata_ptr += decodeQname((char *)Rdata_ptr, (char *)buffer->data, packet->answer[i].name);
+            Rdata_ptr += getURL((char *)Rdata_ptr, (char *)buffer->data, packet->answer[i].name);
             /*Type*/
             uint16_t tmp;
             Rdata_ptr = _read16(Rdata_ptr, &tmp);
@@ -763,7 +763,6 @@ void DNSPacket_decode(Buffer *buffer, DNS_PKT *packet)
     {
         packet->answer = NULL;
     }
-
 }
 
 /**
@@ -773,52 +772,54 @@ Buffer DNSPacket_encode(DNS_PKT packet)
 {
     Buffer buffer = makeBuffer(DNS_PACKET_SIZE);
     uint8_t *data = buffer.data;
-    uint8_t offset=0;
+    uint8_t offset = 0;
     /* Header */
     offset = _write16(data, packet.header->ID);
-    data+=offset;
+    data += offset;
     /* QR+OP+AA+TC+RD */
     offset = _write8(data, packet.header->QR << 7 |
-                             packet.header->Opcode << 3 |
-                             packet.header->AA << 2 |
-                             packet.header->TC << 1 |
-                             packet.header->RD << 0);
-    data+=offset;
+                               packet.header->Opcode << 3 |
+                               packet.header->AA << 2 |
+                               packet.header->TC << 1 |
+                               packet.header->RD << 0);
+    data += offset;
     /* RA+padding(3)+RCODE */
     offset = _write8(data, packet.header->RA << 7 | packet.header->Rcode);
-    data+=offset;
+    data += offset;
     /* Counts */
     offset = _write16(data, packet.header->QDCOUNT);
-    data+=offset;
+    data += offset;
     offset = _write16(data, packet.header->ANCOUNT);
-    data+=offset;
+    data += offset;
     offset = _write16(data, packet.header->NSCOUNT);
-    data+=offset;
+    data += offset;
     offset = _write16(data, packet.header->ARCOUNT);
-    data+=offset;
+    data += offset;
     /* Questions */
     for (int i = 0; i < packet.header->QDCOUNT; i++)
     {
         offset = toQname(packet.question[i].name, (char *)data);
-        data+=offset;
+        data += offset;
         offset = _write16(data, packet.question[i].Qtype);
-        data+=offset;
+        data += offset;
         offset = _write16(data, packet.question[i].Qclass);
-        data+=offset;
+        data += offset;
     }
     /* Answers */
     for (int i = 0; i < packet.header->ANCOUNT; i++)
     {
+        //考虑压缩指针问题
+        offset=
         offset = toQname(packet.answer[i].name, (char *)data);
-        data+=offset;
-        offset = _write16(data+offset, packet.answer[i].type);
-        data+=offset;
+        data += offset;
+        offset = _write16(data + offset, packet.answer[i].type);
+        data += offset;
         offset = _write16(data, packet.answer[i].addr_class);
-        data+=offset;
+        data += offset;
         offset = _write32(data, packet.answer[i].TTL);
-        data+=offset;
+        data += offset;
         offset = _write16(data, packet.answer[i].rdlength);
-        data+=offset;
+        data += offset;
         memcpy(data, packet.answer[i].rdata, packet.answer[i].rdlength);
         data += packet.answer[i].rdlength;
     }
@@ -826,15 +827,15 @@ Buffer DNSPacket_encode(DNS_PKT packet)
     for (int i = 0; i < packet.header->NSCOUNT; i++)
     {
         offset = toQname(packet.authority[i].name, (char *)data);
-        data+=offset;
-        offset = _write16(data+offset, packet.authority[i].type);
-        data+=offset;
+        data += offset;
+        offset = _write16(data + offset, packet.authority[i].type);
+        data += offset;
         offset = _write16(data, packet.authority[i].addr_class);
-        data+=offset;
+        data += offset;
         offset = _write32(data, packet.authority[i].TTL);
-        data+=offset;
+        data += offset;
         offset = _write16(data, packet.authority[i].rdlength);
-        data+=offset;
+        data += offset;
         memcpy(data, packet.authority[i].rdata, packet.authority[i].rdlength);
         data += packet.authority[i].rdlength;
     }
@@ -842,15 +843,15 @@ Buffer DNSPacket_encode(DNS_PKT packet)
     for (int i = 0; i < packet.header->ARCOUNT; i++)
     {
         offset = toQname(packet.additional[i].name, (char *)data);
-        data+=offset;
-        offset = _write16(data+offset, packet.additional[i].type);
-        data+=offset;
+        data += offset;
+        offset = _write16(data + offset, packet.additional[i].type);
+        data += offset;
         offset = _write16(data, packet.additional[i].addr_class);
-        data+=offset;
+        data += offset;
         offset = _write32(data, packet.additional[i].TTL);
-        data+=offset;
+        data += offset;
         offset = _write16(data, packet.additional[i].rdlength);
-        data+=offset;
+        data += offset;
         memcpy(data, packet.additional[i].rdata, packet.additional[i].rdlength);
         data += packet.additional[i].rdlength;
     }
@@ -858,78 +859,50 @@ Buffer DNSPacket_encode(DNS_PKT packet)
     return buffer;
 }
 
-
-int decodeQname(char *ptr, char *start, char *newStr) {
-    newStr[0] = '\0';
-    int len = 0;
-    int dot = 0;
-    for (int i = 0; 1; i++) {
-        if (dot == i) {
-            if ((unsigned char)ptr[i] >= 0xC0) {//前两位是11，是压缩指针的形式
-                int offset = ((unsigned char)ptr[i] << 8 | (unsigned char)ptr[i + 1]) & 0xfff;
-                strcat_s(newStr, 256, ".");
-                char tmpStr[257];
-                decodeQname(start + offset, start, tmpStr);
-                strcat_s(newStr, 256, tmpStr);
-                len = i + 2;
-                break;
-            } else if (ptr[i] != '\0') {
-                strcat_s(newStr, 256, ".");
-                dot = i + ptr[i] + 1;
-            } else {
-                size_t strLength = strlen(newStr);
-                newStr[strLength] = ptr[i];
-                newStr[strLength + 1] = 0;
-                len = i + 1;
-                break;
-            }
-        } else if (ptr[i] != '\0') {
-            size_t strLength = strlen(newStr);
-            newStr[strLength] = ptr[i];
-            newStr[strLength + 1] = 0;
-        } else {
-            size_t strLength = strlen(newStr);
-            newStr[strLength] = ptr[i];
-            newStr[strLength + 1] = 0;
-            len = i + 1;
-            break;
-        }
-    }
-    char tmp[256] = "";
-    strcpy_s(tmp, 256, &newStr[1]);
-    strcpy_s(newStr, 256, tmp);
-    return len;
-}
 /**
  * 解析域名（给出点分十进制）
  */
-uint32_t *getURL(char *name_ptr, char *res)
+int getURL(char *ptr, char *start, char *newStr)//传入当前指针指向位置和buffer中data的首地址，newStr指向返回的域名
 {
-    int len = strlen(name_ptr); // 计算该域名的长度
-    int idx = 0;                // 在dns包内域名字符下标
-    int bias = name_ptr[0];     // 决定接下来复制字符数量
-    int i = 1;
-    while (i < len)
-    {
-        for (int j = 0; j < bias; j++)
-        {
-            res[idx] = name_ptr[i];
-            idx++;
-            i++;
-        }
-        bias = name_ptr[i]; // 计算该域名下一段的长度
-        if (bias == 0 || i >= len)
-            break;
-        i++;
-        res[idx] = '.';
-        idx++;
+    newStr[0] = '\0';
+    int len = 0;
+    int dot = 0;
+    if ((unsigned char)ptr[0] >= 0xC0)
+    { // 前两位是11，说明该域名字段是压缩指针的形式
+        int offset = ((unsigned char)ptr[0] << 8 | (unsigned char)ptr[1]) & 0xfff;//压缩指针偏移量
+        strcat_s(newStr, 256, ".");
+        char tmpStr[257];
+        getURL(start + offset, start, tmpStr);//递归查询域名
+        return 2;                   //压缩指针占两字节
     }
-    res[idx] = '\0'; // 字符串结束
-    return name_ptr + len + 1;
+    else//解析普通域名
+    {
+        int len = strlen(ptr);      // 计算该域名的长度
+        int idx = 0;                // 点分十进制域名字符下标
+        int bias = ptr[0];          // 决定接下来复制字符数量
+        int i = 1;                  //当前处理字节数
+        while (i < len)
+        {
+            for (int j = 0; j < bias; j++)
+            {
+                newStr[idx] = ptr[i];
+                idx++;
+                i++;
+            }
+            bias = ptr[i];          // 计算该域名下一段的长度
+            if (bias == 0 || i >= len)
+                break;
+            i++;
+            newStr[idx] = '.';
+            idx++;
+        }
+        newStr[idx]='\0';           //标志字符串结束
+        return len+1;               //返回读取数据的指针的偏移量
+    }
 }
 
 /**
- * 解析域名（将点分十进制换为buffer模式）
+ * 解析域名（将点分十进制换为标准模式）
  */
 uint8_t toQname(char *name, char *data)
 {
@@ -944,14 +917,14 @@ uint8_t toQname(char *name, char *data)
         }
         else
         {
-            if(name[i]>='A'&&name[i]<='Z')//将域名中大写转小写
-                name[i]=name[i]+'a'-'A';
+            if (name[i] >= 'A' && name[i] <= 'Z') // 将域名中大写转小写
+                name[i] = name[i] + 'a' - 'A';
             length++;
             data[i + 1] = name[i];
         }
     }
-    data[j]=length;
-    data[i+1]= 0;
+    data[j] = length;
+    data[i + 1] = 0;
     return strlen(name) + 2;
 }
 /**

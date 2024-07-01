@@ -101,5 +101,4 @@ Buffer DNSPacket_encode(DNS_PKT packet);//DNS包转buffer
 void DNSPacket_decode(Buffer *buffer, DNS_PKT *packet);//buffer转DNS包
 void DNSPacket_destroy(DNS_PKT packet);//销毁无用DNS包，解除内存占用
 void DNSPacket_print(DNS_PKT *packet);//调试输出一个DNS包的内容
-uint32_t *getURL(char *name_ptr, char *res);
 #endif
