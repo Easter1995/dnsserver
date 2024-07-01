@@ -28,13 +28,13 @@ typedef struct BLOCK_TABLE {
 /**
  * cache里面的ip链表
  */
-typedef struct IP_LIST {
+typedef struct IP_NODE {
   struct list_head list;
   uint32_t ip;
-} IP_LIST;
+} IP_NODE;
 
 /**
- * cache列表
+ * cache列表头
  */
 typedef struct CACHE_LIST {
   struct list_head list;
@@ -49,7 +49,7 @@ typedef struct CACHE_ENTRY {
   struct list_head list; // 包含了这个节点的两个指针
   // 数据部分
   char name[NAME_LEN];
-  IP_LIST ip_list; // 当前域名包含的ip，用链表存储
+  IP_NODE ip_list; // 当前域名包含的ip，用链表存储
   time_t expireTime; // 超时时间
   uint32_t count; // LRU算法的计数器
   uint32_t ip_count; // 当前域名包含的ip个数
@@ -65,13 +65,10 @@ void relay_table_init();
 void cache_init();
 
 /* 添加cache */
-void cache_add_one(char *name, uint32_t ip, uint32_t ttl);
+void cache_add_one(char *name, uint32_t* ip, uint32_t ttl, int ip_cnt);
 
 /* 查找cache */
-bool cache_search(char *name, uint32_t *ip_array, int *actual_ip_cnt);
-
-/* 获取cache_list的互斥量句柄 */
-HANDLE get_cache_lock();
+bool cache_search(char *name, IP_NODE *ip_list, int *actual_ip_cnt);
 
 /* cache列表，使用双向链表存储 */
 CACHE_LIST cache_list;

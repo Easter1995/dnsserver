@@ -602,13 +602,13 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
     if (shouldCache)
     {
         // 逐个缓存条目
-        for (uint16_t i = 0; i < packet.header->ANCOUNT; i++)
-        {
-            if (packet.answer[i].type == A)
-            {                                                                                        // 如果回答的类型是ipv4地址
-                cache_add_one(packet.answer[i].name, *packet.answer[i].rdata, packet.answer[i].TTL); // 向cache中存储该条域名-ip数据
-            }
-        }
+        // for (uint16_t i = 0; i < packet.header->ANCOUNT; i++)
+        // {
+        //     if (packet.answer[i].type == A)
+        //     {                                                                                        // 如果回答的类型是ipv4地址
+        //         cache_add_one(packet.answer[i].name, *packet.answer[i].rdata, packet.answer[i].TTL, packet.header->ANCOUNT); // 向cache中存储该条域名-ip数据
+        //     }
+        // }
         if (runtime->config.debug)
         {
             printf("ADDED TO CACHE\n");

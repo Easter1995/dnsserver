@@ -73,7 +73,7 @@ void enqueue_task(struct sockaddr_in client_addr, DNS_PKT pkt, Buffer buffer);
 Request* dequeue_request(RequestQueue* queue);
 
 /* 从任务队列取出任务 */
-Request *dequeue_task(Request *request);
+Request* dequeue_task(Request *request);
 
 /* 销毁任务队列 */
 void destroy_request_queue(RequestQueue* queue);
