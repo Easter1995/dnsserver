@@ -601,14 +601,11 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
     }
     if (shouldCache)
     {
-        // 逐个缓存条目
-        // for (uint16_t i = 0; i < packet.header->ANCOUNT; i++)
-        // {
-        //     if (packet.answer[i].type == A)
-        //     {                                                                                        // 如果回答的类型是ipv4地址
-        //         cache_add_one(packet.answer[i].name, *packet.answer[i].rdata, packet.answer[i].TTL, packet.header->ANCOUNT); // 向cache中存储该条域名-ip数据
-        //     }
-        // }
+        uint32_t* ip_Array = (uint32_t*)malloc(sizeof(uint32_t) * packet.header->ANCOUNT); // 创建一个IP数组，用于存储该域名的所有IP
+        for(int i = 0; i < packet.header->ANCOUNT; i++) {
+            _read32((uint8_t *)packet.answer[i].rdata, &ip_Array[i]); // 将rdata中的IP地址写入ip_Arrray
+        }
+        cache_add(packet.answer[0].name, ip_Array, packet.answer[0].TTL, packet.header->ANCOUNT); // 该域名的所有IP地址以及其他信息存入cache中
         if (runtime->config.debug)
         {
             printf("ADDED TO CACHE\n");
@@ -747,9 +744,9 @@ void DNSPacket_decode(Buffer *buffer, DNS_PKT *packet)
             /*Data length*/
             Rdata_ptr = _read16(Rdata_ptr, &packet->answer[i].rdlength);
             /*data*/
-            packet->answer[i].rdata = (char *)malloc(sizeof(char) * packet->answer->rdlength);
-            memcpy(packet->answer->rdata, Rdata_ptr, packet->answer->rdlength);
-            Rdata_ptr += packet->answer->rdlength;
+            packet->answer[i].rdata = (char *)malloc(sizeof(char) * packet->answer[i].rdlength);
+            memcpy(packet->answer[i].rdata, Rdata_ptr, packet->answer[i].rdlength);
+            Rdata_ptr += packet->answer[i].rdlength;
 
             if (Rdata_ptr > buffer->data + buffer->length + 1) // 指针越界
             {

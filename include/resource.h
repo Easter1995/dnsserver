@@ -65,7 +65,7 @@ void relay_table_init();
 void cache_init();
 
 /* 添加cache */
-void cache_add_one(char *name, uint32_t* ip, uint32_t ttl, int ip_cnt);
+void cache_add(char *name, uint32_t* ip, uint32_t ttl, int ip_cnt);
 
 /* 查找cache */
 bool cache_search(char *name, IP_NODE *ip_list, int *actual_ip_cnt);

@@ -51,7 +51,7 @@ void cache_init()
 /**
  * 添加ip_cnt条cache
  */
-void cache_add_one(char *name, uint32_t* ip, uint32_t ttl, int ip_cnt)
+void cache_add(char *name, uint32_t* ip, uint32_t ttl, int ip_cnt)
 {
     CACHE_ENTRY *cache_entry = (CACHE_ENTRY *)malloc(sizeof(CACHE_ENTRY));
     // 初始化ip链表
