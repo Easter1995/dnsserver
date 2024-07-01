@@ -116,7 +116,7 @@ unsigned __stdcall worker_thread(void *arg)
             if (dnspacket.question->Qtype == 1)
             { // 只有当请求的资源类型为ipv4时，服务器做出回应
                 uint32_t found_ip;
-                // 拦截不良网站
+                // 先在本地relaylist中查找
                 if (trie_search(dnspacket.question->name, &found_ip))
                 {
                     DNS_PKT answer_Packet = prepare_answerPacket(found_ip, dnspacket, 1);
@@ -142,7 +142,7 @@ unsigned __stdcall worker_thread(void *arg)
                         printf("Sent %d bytes to server.\n", sendBytes);
                     return 0;
                 }
-                // 先在本地cache中搜索
+                // 再在cache中搜索
                 int actual_ip_cnt = 0;
                 uint32_t target_ip[MAX_IP_COUNT];
                 bool find_result = cache_search(dnspacket.question->name, target_ip, &actual_ip_cnt);
