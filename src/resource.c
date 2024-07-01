@@ -51,7 +51,7 @@ void cache_init()
 /**
  * 添加ip_cnt条cache
  */
-void cache_add_one(char *name, uint32_t* ip, uint32_t ttl, int ip_cnt)
+void cache_add(char *name, uint32_t* ip, uint32_t ttl, int ip_cnt)
 {
     CACHE_ENTRY *cache_entry = (CACHE_ENTRY *)malloc(sizeof(CACHE_ENTRY));
     // 初始化ip链表
@@ -62,7 +62,7 @@ void cache_add_one(char *name, uint32_t* ip, uint32_t ttl, int ip_cnt)
     for (int i = 0; i < ip_cnt; i++) {
         IP_NODE *ip_node = (IP_NODE *)malloc(sizeof(IP_NODE));
         ip_node->ip = ip[i];
-        list_add(&ip_node->list, &cache_entry->list);
+        list_add_tail(&ip_node->list, &cache_entry->ip_list.list);
     }
     // 存储域名
     strcpy(cache_entry->name, name);
@@ -71,6 +71,7 @@ void cache_add_one(char *name, uint32_t* ip, uint32_t ttl, int ip_cnt)
     cache_entry->count = 0;
     cache_entry->expireTime = time(NULL) + ttl;
 
+    // 操作cache_list，需要获取互斥锁
     // 等待获取互斥量的控制权
     DWORD dwWaitResult = WaitForSingleObject(cache_list.lock, INFINITE);
 
@@ -142,7 +143,7 @@ void cache_add_one(char *name, uint32_t* ip, uint32_t ttl, int ip_cnt)
 }
 
 /**
- * 查找一条cache并返回ip，若找到，其余未命中cache的count++
+ * 查找一条cache并返回ip链表，若找到，其余未命中cache的count++
  */
 bool cache_search(char *name, IP_NODE *ip_list, int *actual_ip_cnt)
 {

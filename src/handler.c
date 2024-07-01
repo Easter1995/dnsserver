@@ -115,11 +115,11 @@ unsigned __stdcall worker_thread(void *arg)
             }
             if (dnspacket.question->Qtype == 1)
             { // 只有当请求的资源类型为ipv4时，服务器做出回应
-                uint32_t wrong_ip[1];
+                uint32_t found_ip;
                 // 拦截不良网站
-                if (trie_search(dnspacket.question->name, &wrong_ip[0]))
+                if (trie_search(dnspacket.question->name, &found_ip))
                 {
-                    DNS_PKT answer_Packet = prepare_answerPacket(wrong_ip, dnspacket, 1);
+                    DNS_PKT answer_Packet = prepare_answerPacket(found_ip, dnspacket, 1);
                     if (runtime->config.debug)
                     { // 输出调试信息
                         printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
@@ -466,7 +466,7 @@ DNS_PKT prepare_answerPacket(uint32_t *ip, DNS_PKT packet, int ip_count)
     packet.header->ANCOUNT = ip_count;
     packet.header->RA = 1;
     strcpy(packet.answer->name, packet.question->name);
-    if (ip[0] == 0)
+    if (ip == 0)
     {
         packet.header->ANCOUNT = 0;
         packet.header->Rcode = 3;
