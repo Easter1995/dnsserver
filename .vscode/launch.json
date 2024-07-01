@@ -11,10 +11,10 @@
             "program": "${workspaceFolder}\\build\\DNSSERVER.exe",
             "args": ["-b"],
             "stopAtEntry": false,
-            "cwd": "D:\\computer\\CodeBlocks\\mingw64\\bin",
+            "cwd": "D:\\MinGW\\bin",
             "environment": [],
             "MIMode": "gdb",
-            "miDebuggerPath": "D:\\computer\\CodeBlocks\\mingw64\\bin\\gdb.exe",
+            "miDebuggerPath": "D:\\MinGW\\bin\\gdb.exe",
             "setupCommands": [
                 {
                     "description": "为 gdb 启用整齐打印",
