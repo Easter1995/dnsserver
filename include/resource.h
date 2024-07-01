@@ -26,6 +26,14 @@ typedef struct BLOCK_TABLE {
 } BLOCK_TABLE;
 
 /**
+ * cache里面的ip链表
+ */
+typedef struct IP_LIST {
+  struct list_head list;
+  uint32_t ip;
+} IP_LIST;
+
+/**
  * cache列表
  */
 typedef struct CACHE_LIST {
@@ -41,16 +49,17 @@ typedef struct CACHE_ENTRY {
   struct list_head list; // 包含了这个节点的两个指针
   // 数据部分
   char name[NAME_LEN];
-  uint32_t ip;
-  time_t expireTime;
+  IP_LIST ip_list; // 当前域名包含的ip，用链表存储
+  time_t expireTime; // 超时时间
   uint32_t count; // LRU算法的计数器
-} CACHE_ENTRY;
+  uint32_t ip_count; // 当前域名包含的ip个数
+} CACHE_ENTRY; 
 
 /* 点分十进制IPv4字符串转换为32位无符号数 */
 uint32_t ip_to_u32(char ip[IPv4_LEN]);
 
 /* 初始化拦截表 */
-void block_table_init();
+void relay_table_init();
 
 /* 初始化cache */
 void cache_init();

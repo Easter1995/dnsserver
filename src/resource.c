@@ -5,7 +5,7 @@ uint32_t block_table_number = 0;
 /**
  * 初始化拦截列表
  */
-void block_table_init()
+void relay_table_init()
 {
     trie_init();
     // 打开拦截列表文件
@@ -54,10 +54,12 @@ void cache_init()
 void cache_add_one(char *name, uint32_t ip, uint32_t ttl)
 {
     CACHE_ENTRY *cache_entry = (CACHE_ENTRY *)malloc(sizeof(CACHE_ENTRY));
+    memset(&cache_entry->list, 0, sizeof(cache_entry->list));
     strcpy(cache_entry->name, name);
-    cache_entry->ip = ip;
+    INIT_LIST_HEAD(&cache_entry->list); // 初始化ip链表
     cache_entry->count = 0;
-    cache_entry->expireTime = time(NULL) + ttl;
+    cache_entry->ip_count = 0;
+    cache_entry->expireTime = time(NULL) + ttl; // 设置表项超时时间
 
     // 等待获取互斥量的控制权
     DWORD dwWaitResult = WaitForSingleObject(cache_list.lock, INFINITE);

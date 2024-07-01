@@ -50,7 +50,7 @@ int main(int argc, char **argv)
     init_thread_pool();
 
     /* 初始化拦截列表 */
-    block_table_init();
+    relay_table_init();
 
     /* 初始化cache */
     cache_init();

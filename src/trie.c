@@ -13,6 +13,7 @@ void trie_init()
 
 /**
  * 字典树插入节点
+ * ip为0.0.0.0表示域名不存在（拦截），ip正常表示域名ip都正常返回
  */
 void trie_insert(char *domain, uint32_t ip)
 {
