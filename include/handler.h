@@ -24,9 +24,6 @@ void socket_init(DNS_RUNTIME *runtime);
 /* 工作线程 */
 unsigned __stdcall worker_thread(void* arg);
 
-/* 判断此ip是否可以存入cache */
-int IsCacheable(DNSQType type);
-
 /* 初始化一个DNS空包 */
 DNS_PKT init_DNSpacket();
 
@@ -53,9 +50,10 @@ uint8_t _write16(uint8_t *ptr, uint16_t value);
 uint8_t *_read8(uint8_t *ptr, uint8_t *value);
 uint8_t _write8(uint8_t *ptr, uint8_t value);
 
-/*寻找空闲回话id*/
+/*寻找空闲会话id*/
 uint16_t setIdMap(IdMap *idMap, IdMap item, uint16_t curMaxId);
 
+/*释放会话id并返回会话id对应的IdMap信息*/
 IdMap getIdMap(IdMap *idMap, uint16_t i);
 
 /*接受DNS包*/

@@ -534,13 +534,13 @@ DNS_PKT recvPacket(DNS_RUNTIME *runtime, SOCKET socket, Buffer *buffer, struct s
  */
 void HandleFromUpstream(DNS_RUNTIME *runtime)
 {
-    Buffer buffer = makeBuffer(DNS_PACKET_SIZE); // 创建一个缓冲区，用于存放将来发送的包的数据
+    Buffer buffer = makeBuffer(DNS_PACKET_SIZE); // 创建一个缓冲区，用于存放收到的包的数据
     int status = 0;
     DNS_PKT packet = recvPacket(runtime, runtime->client, &buffer, &runtime->upstream_addr, &status);
 
     if (status <= 0)
     {
-        // 接收失败 ———— 空包，甚至不需要destroy。
+        // 接收失败 ———— 空包，甚至不需要destroy
         free(buffer.data);
         return;
     }
