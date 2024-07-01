@@ -567,17 +567,7 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
         DNSPacket_print(&packet);
         runtime->totalCount++;
         printf("TOTAL COUNT %d\n", runtime->totalCount);
-    } // 需要的话，输出调试信息
-     Buffer buffer_tmp;
-     buffer_tmp = DNSPacket_encode(packet); // 将上游响应的DNS报文转换为buffer
-
-    // 确认发送数据长度
-    // buffer.length = buffer_tmp.length;
-
-    // 将上游响应的数据内容存入发送缓冲区
-    // memcpy(buffer.data, buffer_tmp.data, buffer_tmp.length);
-
-    // free(buffer_tmp.data);
+     } // 需要的话，输出调试信息
     status = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client.addr, sizeof(client.addr));
     if (status == SOCKET_ERROR)
     {
@@ -804,9 +794,9 @@ Buffer DNSPacket_encode(DNS_PKT packet)
     for (int i = 0; i < packet.header->ANCOUNT; i++)
     {
         //考虑压缩指针问题
-        uint16_t new_offset=isFind_repeatDomain((char *)question_ptr,(char *)packet.answer[i].name,(char *)buffer.data);
+        uint16_t new_offset=isFind_repeatDomain((char *)packet.question,(char *)packet.answer[i].name,(char *)question_ptr,(char *)buffer.data);
         if(offset>=0){
-            int16_t compressed_pointer = DNS_COMPRESSION_POINTER(offset);
+            int16_t compressed_pointer = DNS_COMPRESSION_POINTER(new_offset);
             offset = _write16(data,compressed_pointer);
         }
         else {
@@ -863,10 +853,10 @@ Buffer DNSPacket_encode(DNS_PKT packet)
 /**
  * 判断当前域名是否重复,如果重复则返回压缩指针偏移量，否则返回-1
  */
-int isFind_repeatDomain(char *question_name,char *answer_name,char *start){
-    if(strcmp(answer_name[0],question_name[0])==0)
+int isFind_repeatDomain(char *question_name,char *answer_name,char *question,char *start){
+    if(strcmp(answer_name,question_name)==0)
     {
-        return question_name-start;
+        return question-start;
     }else
         return -1;
 }
@@ -881,9 +871,7 @@ int getURL(char *ptr, char *start, char *newStr)//传入当前指针指向位置
     if ((unsigned char)ptr[0] >= 0xC0)
     { // 前两位是11，说明该域名字段是压缩指针的形式
         int offset = ((unsigned char)ptr[0] << 8 | (unsigned char)ptr[1]) & 0xfff;//压缩指针偏移量
-        strcat_s(newStr, 256, ".");
-        char tmpStr[257];
-        getURL(start + offset, start, tmpStr);//递归查询域名
+        getURL(start + offset, start, newStr);//递归查询域名
         return 2;                   //压缩指针占两字节
     }
     else//解析普通域名
