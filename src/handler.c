@@ -119,18 +119,18 @@ unsigned __stdcall worker_thread(void *arg)
                 // 先在本地relaylist中查找
                 if (trie_search(dnspacket.question->name, &found_ip))
                 {
-                    DNS_PKT answer_Packet = prepare_answerPacket(found_ip, dnspacket, 1);
+                    prepare_answerPacket(found_ip, &dnspacket, 1);
                     if (runtime->config.debug)
                     { // 输出调试信息
                         printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
-                        DNSPacket_print(&answer_Packet);
+                        DNSPacket_print(&dnspacket);
                         runtime->totalCount++;
                         printf("Domain name blocked!\n");
                         printf("TOTAL COUNT %d\n", runtime->totalCount);
                     }
 
-                    buffer = DNSPacket_encode(answer_Packet); // 将DNS包转换为buffer，方便发送
-                    DNSPacket_destroy(answer_Packet);
+                    buffer = DNSPacket_encode(dnspacket); // 将DNS包转换为buffer，方便发送
+                    DNSPacket_destroy(dnspacket);
                     int sendBytes = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_Addr, sizeof(client_Addr)); // 由服务器发给客户端找到的ip信息
                     free(buffer.data);                                                                                                                    // 数据发送完后释放缓存
                     if (sendBytes == SOCKET_ERROR)
@@ -149,18 +149,18 @@ unsigned __stdcall worker_thread(void *arg)
                 if (find_result)
                 {
                     // 若在cache中查询到了结果
-                    DNS_PKT answer_Packet = prepare_answerPacket(target_ip, dnspacket, actual_ip_cnt);
+                    prepare_answerPacket(target_ip, &dnspacket, actual_ip_cnt);
                     if (runtime->config.debug)
                     { // 输出调试信息
                         printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
-                        DNSPacket_print(&answer_Packet);
+                        DNSPacket_print(&dnspacket);
                         runtime->totalCount++;
                         printf("TOTAL COUNT %d\n", runtime->totalCount);
                         printf("CACHE SIZE %d\n", cache_list.list_size);
                     }
-                    answer_Packet.header->RA = 1;
-                    buffer = DNSPacket_encode(answer_Packet); // 将DNS包转换为buffer，方便发送
-                    DNSPacket_destroy(answer_Packet);
+                    dnspacket.header->RA = 1;
+                    buffer = DNSPacket_encode(dnspacket); // 将DNS包转换为buffer，方便发送
+                    DNSPacket_destroy(dnspacket);
                     int sendBytes = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_Addr, sizeof(sizeof(client_Addr))); // 由服务器发给客户端找到的ip信息
                     free(buffer.data);                                                                                                                            // 数据发送完后释放缓存
                     if (sendBytes == SOCKET_ERROR)
@@ -460,31 +460,27 @@ void DNSPacket_print(DNS_PKT *packet)
 /**
  * 生成回应包
  */
-DNS_PKT prepare_answerPacket(uint32_t *ip, DNS_PKT packet, int ip_count)
+void prepare_answerPacket(uint32_t *ip, DNS_PKT *packet, int ip_count)
 {
-    packet.answer = (DNS_RECORD *)malloc(sizeof(DNS_RECORD) * ip_count);
-    packet.header->ANCOUNT = ip_count;
-    packet.header->RA = 1;
-    strcpy(packet.answer->name, packet.question->name);
     if (ip == 0)
     {
-        packet.header->ANCOUNT = 0;
-        packet.header->Rcode = 3;
-        packet.header->QR = 1;
-        packet.answer = NULL;
-        return packet;
+        packet->header->ANCOUNT = 0;
+        packet->header->Rcode = 3;
+        packet->header->QR = 1;
+        return;
     }
-    packet.header->Rcode = 0;
-    packet.header->QR = QRRESPONSE;
-    packet.header->ANCOUNT = ip_count;
+    packet->answer = (DNS_RECORD *)malloc(sizeof(DNS_RECORD) * ip_count);
+    packet->header->Rcode = 0;
+    packet->header->QR = QRRESPONSE;
+    packet->header->ANCOUNT = ip_count;
     for (int i = 0; i < ip_count; i++)
     {
         uint32_t ip_network_order = htonl(ip[i]);
 
-        packet.answer[i].type = 1;
-        packet.answer[i].addr_class = 1;
-        packet.answer[i].rdlength = 4;
-        memcpy(packet.answer[i].rdata, &ip_network_order, sizeof(ip_network_order));
+        packet->answer[i].type = 1;
+        packet->answer[i].addr_class = 1;
+        packet->answer[i].rdlength = 4;
+        memcpy(packet->answer[i].rdata, &ip_network_order, sizeof(ip_network_order));
     }
     return packet;
 }
@@ -534,13 +530,13 @@ DNS_PKT recvPacket(DNS_RUNTIME *runtime, SOCKET socket, Buffer *buffer, struct s
  */
 void HandleFromUpstream(DNS_RUNTIME *runtime)
 {
-    Buffer buffer = makeBuffer(DNS_PACKET_SIZE); // 创建一个缓冲区，用于存放将来发送的包的数据
+    Buffer buffer = makeBuffer(DNS_PACKET_SIZE); // 创建一个缓冲区，用于存放收到的包的数据
     int status = 0;
     DNS_PKT packet = recvPacket(runtime, runtime->client, &buffer, &runtime->upstream_addr, &status);
 
     if (status <= 0)
     {
-        // 接收失败 ———— 空包，甚至不需要destroy。
+        // 接收失败 ———— 空包，甚至不需要destroy
         free(buffer.data);
         return;
     }
