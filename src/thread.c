@@ -41,64 +41,12 @@ void destroy_thread_pool()
     CloseHandle(thread_pool.shutdown_event);
 }
 
-// /**
-//  * 调整线程数量
-//  */
-// void adjust_thread_pool()
-// {
-//     WaitForSingleObject(thread_pool.mutex, INFINITE);
-
-//     // 根据任务队列的长度调整线程数据
-//     int queue_size = list_empty(&thread_pool.request_queue.head) ? 0 : thread_pool.request_queue.queue_len;
-//     int desired_threads;
-//     if (queue_size <= 0)
-//     {
-//         desired_threads = 1; // 任务队列为空时使用初始线程数量
-//     }
-//     else if (queue_size <= THREAD_COUNT_LOW)
-//     {
-//         desired_threads = THREAD_COUNT_LOW; // 低任务量时使用2个线程
-//     }
-//     else if (queue_size <= THREAD_COUNT_MEDIUM)
-//     {
-//         desired_threads = THREAD_COUNT_MEDIUM; // 中等任务量时使用4个线程
-//     }
-//     else
-//     {
-//         desired_threads = THREAD_COUNT_HIGH; // 高任务量时使用8个线程
-//     }
-
-//     // 增加线程数量
-//     while (thread_pool.num_threads < desired_threads && thread_pool.num_threads < THREAD_COUNT_HIGH)
-//     {
-//         thread_pool.threads[thread_pool.num_threads] = (HANDLE)_beginthreadex(NULL, 0, worker_thread, &runtime, 0, NULL);
-//         thread_pool.num_threads++;
-//     }
-
-//     // 减少线程数量
-//     while (thread_pool.num_threads > desired_threads)
-//     {
-//         // 通知一个线程退出
-//         thread_pool.num_threads--;
-//         SetEvent(thread_pool.shutdown_event);
-//     }
-
-//     // 通知线程有任务需要处理
-//     if (queue_size > 0 && thread_pool.num_threads > 0)
-//     {
-//         SetEvent(thread_pool.cond);
-//     }
-
-//     ReleaseMutex(thread_pool.mutex);
-// }
-
 /**
  * 有新任务，入队，调整线程数量
  */
 void enqueue_task(struct sockaddr_in client_addr, DNS_PKT pkt, Buffer buffer)
 {
     enqueue_request(&thread_pool.request_queue, client_addr, pkt, buffer);
-    SetEvent(thread_pool.cond);
 }
 
 /**
@@ -139,6 +87,7 @@ void enqueue_request(RequestQueue *queue, struct sockaddr_in client_addr, DNS_PK
 
     WaitForSingleObject(queue->mutex, INFINITE); // 获取锁
     list_add_tail(&request->list, &queue->head); // 添加到链表尾部
+    SetEvent(thread_pool.cond);                  // 通知线程
     queue->queue_len++;                          // 队列长度++
     ReleaseMutex(queue->mutex);                  // 释放锁
 }

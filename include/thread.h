@@ -13,7 +13,7 @@
 // #define THREAD_COUNT_LOW  2    // 低任务量
 // #define THREAD_COUNT_MEDIUM  4 // 中等任务量
 // #define THREAD_COUNT_HIGH  8   // 高任务量
-#define THREAD_COUNT  3  
+#define THREAD_COUNT  3 
 
 /**
  * 定义任务结构
@@ -56,9 +56,6 @@ void init_thread_pool();
 
 /* 销毁线程池 */
 void destroy_thread_pool();
-
-/* 调整线程数量 */
-void adjust_thread_pool();
 
 /* 初始化任务队列 */
 void init_request_queue(RequestQueue* queue);

@@ -120,6 +120,9 @@ unsigned __stdcall worker_thread(void *arg)
                 if (trie_search(dnspacket.question->name, &found_ip))
                 {
                     prepare_answerPacket(found_ip, &dnspacket, 1);
+                    if (found_ip == 0) {
+                        printf("[BLOCK] Hit block domain name!\n");
+                    }
                     if (runtime->config.debug)
                     { // 输出调试信息
                         printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
@@ -139,7 +142,7 @@ unsigned __stdcall worker_thread(void *arg)
                         WSACleanup();
                     }
                     else
-                        printf("Sent %d bytes to server.\n", sendBytes);
+                        printf("[SEND] Sent %d bytes from relaylist to client.\n", sendBytes);
                     return 0;
                 }
                 // 再在cache中搜索
@@ -214,8 +217,6 @@ unsigned __stdcall worker_thread(void *arg)
  */
 void HandleFromClient(DNS_RUNTIME *runtime)
 {
-    printf("receive a request\n");
-
     Buffer buffer = makeBuffer(DNS_PACKET_SIZE); // 创建缓冲区
     struct sockaddr_in client_Addr;              // 存储客户端的地址信息(IP + port)
     int status = 0;                              // 存储接收数据包的状态
@@ -462,6 +463,7 @@ void DNSPacket_print(DNS_PKT *packet)
  */
 void prepare_answerPacket(uint32_t *ip, DNS_PKT *packet, int ip_count)
 {
+    // 表示域名不存在
     if (ip == 0)
     {
         packet->header->ANCOUNT = 0;
@@ -572,7 +574,7 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
     }
     else
     {
-        printf("Sent %d bytes to client.\n", status);
+        printf("[SEND] Sent %d bytes from upstream to client.\n", status);
     }
 
     if (status < buffer.length)
