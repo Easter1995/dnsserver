@@ -6,14 +6,13 @@
 #include "list.h"
 #include "thread.h"
 
-
 /**
  * 按 Ctrl+C 优雅退出
  */
 BOOL WINAPI console_handler(DWORD signal)
 {
     printf("Quitting...\n");
-    
+
     /* 销毁运行时 */
     destroyRuntime(&runtime);
 

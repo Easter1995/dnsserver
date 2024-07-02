@@ -6,7 +6,7 @@
  */
 void init_thread_pool()
 {
-    thread_pool.num_threads = THREAD_COUNT; // 初始线程为最少线程量
+    thread_pool.num_threads = THREAD_COUNT;                             // 初始线程为最少线程量
     thread_pool.mutex = CreateMutex(NULL, FALSE, NULL);                 // 创建互斥锁
     thread_pool.cond = CreateEvent(NULL, FALSE, FALSE, NULL);           // 创建条件变量
     thread_pool.shutdown_event = CreateEvent(NULL, FALSE, FALSE, NULL); // 线程池关闭事件
@@ -56,7 +56,8 @@ Request *dequeue_task(Request *request)
 {
     WaitForSingleObject(thread_pool.mutex, INFINITE); // 获取线程池资源
     Request *req = dequeue_request(&thread_pool.request_queue);
-    if (req) {
+    if (req)
+    {
         thread_pool.request_queue.queue_len--;
     }
     ReleaseMutex(thread_pool.mutex); // 释放锁，归还线程池资源
@@ -68,7 +69,7 @@ Request *dequeue_task(Request *request)
  */
 void init_request_queue(RequestQueue *queue)
 {
-    INIT_LIST_HEAD(&queue->head);                        // 初始化链表头
+    INIT_LIST_HEAD(&queue->head); // 初始化链表头
     queue->queue_len = 0;
     queue->mutex = CreateMutex(NULL, FALSE, NULL);       // 创建互斥锁
     queue->cond = CreateEvent(NULL, FALSE, FALSE, NULL); // 创建条件变量
@@ -95,10 +96,11 @@ void enqueue_request(RequestQueue *queue, struct sockaddr_in client_addr, DNS_PK
 /**
  * 从任务队列获取任务
  */
-Request* dequeue_request(RequestQueue *queue)
+Request *dequeue_request(RequestQueue *queue)
 {
     WaitForSingleObject(queue->mutex, INFINITE); // 加锁
-    if (list_empty(&queue->head)) { // 如果队列为空，解锁并返回NULL
+    if (list_empty(&queue->head))
+    { // 如果队列为空，解锁并返回NULL
         ReleaseMutex(queue->mutex);
         return NULL;
     }
@@ -107,7 +109,7 @@ Request* dequeue_request(RequestQueue *queue)
     list_del(pos);                            // 从队列中删除
     ReleaseMutex(queue->mutex);               // 解锁
 
-    return list_entry(pos, Request, list);    // 返回请求节点
+    return list_entry(pos, Request, list); // 返回请求节点
 }
 
 /**

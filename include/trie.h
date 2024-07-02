@@ -12,7 +12,8 @@ extern char ALPHABET[37];
 /**
  * 字典树叶子的数据
  */
-typedef struct Trie_Leaf {
+typedef struct Trie_Leaf
+{
   uint32_t ip;
   time_t expireTime;
 } Trie_Leaf;
@@ -20,13 +21,14 @@ typedef struct Trie_Leaf {
 /**
  * 字典树节点
  */
-typedef struct Trie {
-    struct Trie* children[37]; // 包括26个字母、0~9、.符号
-    Trie_Leaf* leaf;           // 叶子节点信息
-    bool is_end;               // 标识是否为一个完整的域名结尾
+typedef struct Trie
+{
+  struct Trie *children[37]; // 包括26个字母、0~9、.符号
+  Trie_Leaf *leaf;           // 叶子节点信息
+  bool is_end;               // 标识是否为一个完整的域名结尾
 } Trie;
 
-Trie* trie;
+Trie *trie;
 
 /* 初始化字典树 */
 void trie_init();

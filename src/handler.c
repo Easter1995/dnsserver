@@ -77,7 +77,6 @@ void socket_init(DNS_RUNTIME *runtime, DNS_CONFIG *config)
     printf("[DNS_RELAY_SERVER START] Accepting Connections from client ...\n");
     printf("Listening on 0.0.0.0:%d with upstream %s\n", config->port, config->upstream_server_IP);
     printf("\n");
-
 }
 
 /**
@@ -147,7 +146,7 @@ unsigned __stdcall worker_thread(void *arg)
                         WSACleanup();
                     }
                     else if (config.debug)
-                        printf("[SEND] Sent %d bytes from relaylist to client.\n", sendBytes);
+                        printf("[SEND] Send %d bytes from relaylist to client.\n", sendBytes);
                 }
                 else
                 {
@@ -568,7 +567,7 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
     }
     else if (config.debug)
     {
-        printf("[SEND] Sent %d bytes response to client.\n", status);
+        printf("[SEND] Send %d bytes response to client.\n", status);
     }
 
     if (status < buffer.length)

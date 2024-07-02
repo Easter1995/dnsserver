@@ -11,24 +11,26 @@
 #pragma comment(lib, "Ws2_32.lib")
 
 /* DNS服务器的配置 */
-typedef struct DNS_CONFIG {
+typedef struct DNS_CONFIG
+{
     boolean debug;               // 是否输出debug信息
     boolean debug_2;             // 二级调试信息
     boolean block_list;          // 是否有拦截网站
-    int port;                    //监听端口号
+    int port;                    // 监听端口号
     char upstream_server_IP[16]; // 上游DNS服务器的IP
-    char hostfile[256];          //HOST文件的文件名
+    char hostfile[256];          // HOST文件的文件名
     char cachefile[256];
 } DNS_CONFIG;
 
 /* 程序运行时 */
-typedef struct DNS_RUNTIME {
+typedef struct DNS_RUNTIME
+{
     DNS_CONFIG config;                // 服务器配置
     boolean quit;                     // 程序是否退出
     SOCKET server;                    // 接受请求的socket
     SOCKET client;                    // 与上级连接的socket
     IdMap *idmap;                     // ID转换表 （ID：对一次DNS请求的标识，用于确定请求方）
-    uint16_t maxId;                   //上一次请求上级时所使用的ID号
+    uint16_t maxId;                   // 上一次请求上级时所使用的ID号
     struct sockaddr_in listen_addr;   // 监听地址
     struct sockaddr_in upstream_addr; // 上级DNS服务器地址
     int totalCount;
