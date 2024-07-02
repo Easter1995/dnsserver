@@ -23,7 +23,7 @@
 void socket_init(DNS_RUNTIME *runtime, DNS_CONFIG *config);
 
 /* 工作线程 */
-unsigned __stdcall worker_thread(void* arg);
+unsigned __stdcall worker_thread(void *arg);
 
 /* 初始化一个DNS空包 */
 DNS_PKT init_DNSpacket();

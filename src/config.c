@@ -6,7 +6,8 @@
 /**
  * 初始化DNS服务器配置
  */
-DNS_CONFIG config_init(int argc, char *argv[]) {
+DNS_CONFIG config_init(int argc, char *argv[])
+{
     DNS_CONFIG config;
     config.block_list = FALSE;
     config.debug = FALSE;
@@ -14,16 +15,20 @@ DNS_CONFIG config_init(int argc, char *argv[]) {
     // 默认上游服务器IP
     strcpy(config.upstream_server_IP, "10.3.9.5");
 
-    for (int i = 0; i < argc; i++) {
-        if (strcmp("-u", argv[i]) == 0) {
+    for (int i = 0; i < argc; i++)
+    {
+        if (strcmp("-u", argv[i]) == 0)
+        {
             // 设定上游服务器IP
-            strcpy(config.upstream_server_IP, argv[i+1]);
+            strcpy(config.upstream_server_IP, argv[i + 1]);
         }
-        else if (strcmp("-b", argv[i]) == 0) {
+        else if (strcmp("-b", argv[i]) == 0)
+        {
             // 设定有blocklist
             config.block_list = TRUE;
         }
-        else if (strcmp("-d", argv[i]) == 0) {
+        else if (strcmp("-d", argv[i]) == 0)
+        {
             // 开启debug模式
             config.debug = TRUE;
         }
@@ -33,7 +38,6 @@ DNS_CONFIG config_init(int argc, char *argv[]) {
             config.debug = TRUE;
             config.debug_2 = TRUE;
         }
-        
     }
     return config;
 }
@@ -41,7 +45,8 @@ DNS_CONFIG config_init(int argc, char *argv[]) {
 /**
  * 运行时初始化
  */
-DNS_RUNTIME runtime_init(DNS_CONFIG *config) {
+DNS_RUNTIME runtime_init(DNS_CONFIG *config)
+{
     DNS_RUNTIME runtime;
     runtime.config = *config;
     runtime.quit = FALSE;
@@ -54,8 +59,10 @@ DNS_RUNTIME runtime_init(DNS_CONFIG *config) {
 /**
  * 运行时销毁
  */
-void destroyRuntime(DNS_RUNTIME *runtime) {
-    if (runtime->quit > 0) {
+void destroyRuntime(DNS_RUNTIME *runtime)
+{
+    if (runtime->quit > 0)
+    {
         // 退出已经处理完成了，无需再处理
         return;
     }

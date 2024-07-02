@@ -13,12 +13,13 @@
 // #define THREAD_COUNT_LOW  2    // 低任务量
 // #define THREAD_COUNT_MEDIUM  4 // 中等任务量
 // #define THREAD_COUNT_HIGH  8   // 高任务量
-#define THREAD_COUNT  3 
+#define THREAD_COUNT 3
 
 /**
  * 定义任务结构
  */
-typedef struct Request{
+typedef struct Request
+{
     struct list_head list;          // 链表节点
     struct sockaddr_in client_addr; // 客户端地址信息
     DNS_PKT dns_packet;             // 收到的包
@@ -28,7 +29,8 @@ typedef struct Request{
 /**
  * 定义任务链表
  */
-typedef struct {
+typedef struct
+{
     struct list_head head; // 链表头
     int queue_len;         // 任务队列长度
     HANDLE mutex;          // 互斥锁
@@ -38,7 +40,8 @@ typedef struct {
 /**
  * 定义线程池
  */
-typedef struct ThreadPool{
+typedef struct ThreadPool
+{
     HANDLE threads[THREAD_COUNT]; // 存放线程的句柄
     int num_threads;
     // int max_threads;
@@ -58,21 +61,21 @@ void init_thread_pool();
 void destroy_thread_pool();
 
 /* 初始化任务队列 */
-void init_request_queue(RequestQueue* queue);
+void init_request_queue(RequestQueue *queue);
 
 /* 往请求队列添加请求 */
-void enqueue_request(RequestQueue* queue, struct sockaddr_in client_addr, DNS_PKT pkt, Buffer buffer);
+void enqueue_request(RequestQueue *queue, struct sockaddr_in client_addr, DNS_PKT pkt, Buffer buffer);
 
 /* 往任务队列添加任务 */
 void enqueue_task(struct sockaddr_in client_addr, DNS_PKT pkt, Buffer buffer);
 
 /* 从请求队列取出请求 */
-Request* dequeue_request(RequestQueue* queue);
+Request *dequeue_request(RequestQueue *queue);
 
 /* 从任务队列取出任务 */
-Request* dequeue_task(Request *request);
+Request *dequeue_task(Request *request);
 
 /* 销毁任务队列 */
-void destroy_request_queue(RequestQueue* queue);
+void destroy_request_queue(RequestQueue *queue);
 
 #endif

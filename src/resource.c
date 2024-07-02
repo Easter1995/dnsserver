@@ -34,14 +34,15 @@ void relay_table_init()
 /**
  * IDMap的初始化
  */
-IdMap *initIdMap(){
+IdMap *initIdMap()
+{
     IdMap *idmap = (IdMap *)malloc(sizeof(IdMap) * (MAXID + 1)); // 为0-65535共65536个id的IdMap分配空间
-    for(int i=0; i <= MAXID; i++){
+    for (int i = 0; i <= MAXID; i++)
+    {
         idmap[i].time = 0; // 把每一个id的过期时间初始化为0
     }
     return idmap;
 }
-
 
 uint16_t setIdMap(IdMap *idMap, IdMap item, uint16_t curMaxId)
 {
@@ -89,23 +90,24 @@ void cache_init()
 /**
  * 添加ip_cnt条cache
  */
-void cache_add(char *name, uint32_t* ip, uint32_t ttl, int ip_cnt)
+void cache_add(char *name, uint32_t *ip, uint32_t ttl, int ip_cnt)
 {
     CACHE_ENTRY *cache_entry = (CACHE_ENTRY *)malloc(sizeof(CACHE_ENTRY));
-    
+
     // 将ip加入ip数组
-    for (int i = 0; i < ip_cnt; i++) {
+    for (int i = 0; i < ip_cnt; i++)
+    {
         cache_entry->ip_list[i] = ip[i];
     }
     // 存储域名
     strcpy(cache_entry->name, name);
-    
+
     cache_entry->ip_count = ip_cnt;
     cache_entry->count = 0;
     cache_entry->expireTime = time(NULL) + ttl;
 
     // 操作cache_list，需要获取互斥锁
-    
+
     // 等待获取互斥量的控制权
     DWORD dwWaitResult = WaitForSingleObject(cache_list.lock, INFINITE);
 
@@ -227,7 +229,7 @@ bool cache_search(char *name, uint32_t **ip_list, int *actual_ip_cnt)
             }
         }
         ReleaseMutex(cache_list.lock); // 释放互斥量
-        
+
         break;
     case WAIT_ABANDONED:
         // 互斥量已被放弃
@@ -264,4 +266,3 @@ uint32_t ip_to_u32(char ip[IPv4_LEN])
     uint32_t ipv4 = temp_ip[0] * 256 * 256 * 256 + temp_ip[1] * 256 * 256 + temp_ip[2] * 256 + temp_ip[3];
     return ipv4;
 }
-
