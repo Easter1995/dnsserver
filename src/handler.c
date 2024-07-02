@@ -93,12 +93,6 @@ unsigned __stdcall worker_thread(void *arg)
 
         printf("worker_thread start\n");
 
-        if (wait_result == WAIT_OBJECT_0 + 1)
-        {
-            // 第二个句柄触发，收到关闭事件，退出线程
-            return 0;
-        }
-
         Request *request = dequeue_task(&thread_pool.request_queue); // 获取请求
         if (request)
         {
@@ -143,7 +137,6 @@ unsigned __stdcall worker_thread(void *arg)
                     }
                     else
                         printf("[SEND] Sent %d bytes from relaylist to client.\n", sendBytes);
-                    return 0;
                 }
                 // 若在relaylist中不存在，则再在cache中搜索
                 int actual_ip_cnt = 0;
@@ -152,7 +145,7 @@ unsigned __stdcall worker_thread(void *arg)
                 if (find_result)
                 {
                     // 若在cache中查询到了结果
-                    prepare_answerPacket(target_ip, &dnspacket, actual_ip_cnt);
+                    //prepare_answerPacket(target_ip, &dnspacket, actual_ip_cnt);
                     if (runtime->config.debug)
                     { // 输出调试信息
                         printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
@@ -163,17 +156,7 @@ unsigned __stdcall worker_thread(void *arg)
                     }
                     dnspacket.header->RA = 1;
                     buffer = DNSPacket_encode(dnspacket); // 将DNS包转换为buffer，方便发送
-                    DNSPacket_destroy(dnspacket);
-                    int sendBytes = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_Addr, sizeof(sizeof(client_Addr))); // 由服务器发给客户端找到的ip信息
                     free(buffer.data);                                                                                                                            // 数据发送完后释放缓存
-                    if (sendBytes == SOCKET_ERROR)
-                    {
-                        printf("sendto failed: %d\n", WSAGetLastError());
-                        WSACleanup();
-                    }
-                    else
-                        printf("Sent %d bytes to server.\n", sendBytes);
-                    return 0;
                 }
                 /*若cache未命中，则需要向上级发送包进一步查询*/
                 IdMap mapItem;                             // 声明一个ID转换表
@@ -188,20 +171,12 @@ unsigned __stdcall worker_thread(void *arg)
                     printf("Send packet to upstream\n");
                     DNSPacket_print(&dnspacket);
                 }
-                printf("Send packet to upstream\n");
+
 
                 buffer = DNSPacket_encode(dnspacket);
                 DNSPacket_destroy(dnspacket);
                 int status = sendto(runtime->client, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&runtime->upstream_addr, sizeof(runtime->upstream_addr));
-                if (status == SOCKET_ERROR)
-                {
-                    printf("sendto failed: %d\n", WSAGetLastError());
-                    WSACleanup();
-                }
-                else
-                {
-                    printf("Sent %d bytes to UP-server.\n", status);
-                }
+                
             }
             free(buffer.data);
             free(request);
@@ -287,10 +262,6 @@ void DNSPacket_destroy(DNS_PKT packet)
             packet.additional[i].rdata = NULL;
         }
     }
-    free(packet.answer);
-    free(packet.question);
-    free(packet.authority);
-    free(packet.additional);
 }
 
 /**
@@ -574,7 +545,7 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
     }
     else
     {
-        printf("[SEND] Sent %d bytes from upstream to client.\n", status);
+        printf("[SEND] Sent %d bytes response to client.\n", status);
     }
 
     if (status < buffer.length)
@@ -723,7 +694,7 @@ void DNSPacket_decode(Buffer *buffer, DNS_PKT *packet)
             /*Type*/
             uint16_t tmp;
             Rdata_ptr = _read16(Rdata_ptr, &tmp);
-            packet->answer->type = (DNSQType)tmp;
+            packet->answer[i].type = (DNSQType)tmp;
             /*Class*/
             Rdata_ptr = _read16(Rdata_ptr, &tmp);
             packet->answer[i].addr_class = (uint16_t)tmp;
@@ -747,6 +718,79 @@ void DNSPacket_decode(Buffer *buffer, DNS_PKT *packet)
     else
     {
         packet->answer = NULL;
+    }
+    /* Authority */
+    if (packet->header->NSCOUNT > 0)
+    {
+        packet->authority = (DNS_RECORD *)malloc(sizeof(DNS_RECORD) * packet->header->NSCOUNT);
+        /*Name*/
+        for (int i = 0; i < packet->header->NSCOUNT; i++)
+        {
+
+            Rdata_ptr += getURL((char *)Rdata_ptr, (char *)buffer->data, packet->authority[i].name);
+            /*Type*/
+            uint16_t tmp;
+            Rdata_ptr = _read16(Rdata_ptr, &tmp);
+            packet->authority[i].type = (DNSQType)tmp;
+            /*Class*/
+            Rdata_ptr = _read16(Rdata_ptr, &tmp);
+            packet->authority[i].addr_class = (uint16_t)tmp;
+            /*Time to live*/
+            Rdata_ptr = _read32(Rdata_ptr, &packet->authority[i].TTL);
+            /*Data length*/
+            Rdata_ptr = _read16(Rdata_ptr, &packet->authority[i].rdlength);
+            /*data*/
+            packet->authority[i].rdata = (char *)malloc(sizeof(char) * packet->authority[i].rdlength);
+            memcpy(packet->authority[i].rdata, Rdata_ptr, packet->authority[i].rdlength);
+            Rdata_ptr += packet->authority[i].rdlength;
+
+            if (Rdata_ptr > buffer->data + buffer->length + 1) // 指针越界
+            {
+                buffer->length = 0;
+                *packet = init_DNSpacket();
+                return; // 返回一个空包
+            }
+        }
+    }
+    else
+    {
+        packet->authority = NULL;
+    }
+    if (packet->header->ARCOUNT > 0)
+    {
+        packet->additional = (DNS_RECORD *)malloc(sizeof(DNS_RECORD) * packet->header->ANCOUNT); // 根据头部记录answer的数量来malloc指定空间
+        /*Name*/
+        for (int i = 0; i < packet->header->ANCOUNT; i++)
+        {
+
+            Rdata_ptr += getURL((char *)Rdata_ptr, (char *)buffer->data, packet->additional[i].name);
+            /*Type*/
+            uint16_t tmp;
+            Rdata_ptr = _read16(Rdata_ptr, &tmp);
+            packet->additional[i].type = (DNSQType)tmp;
+            /*Class*/
+            Rdata_ptr = _read16(Rdata_ptr, &tmp);
+            packet->additional[i].addr_class = (uint16_t)tmp;
+            /*Time to live*/
+            Rdata_ptr = _read32(Rdata_ptr, &packet->additional[i].TTL);
+            /*Data length*/
+            Rdata_ptr = _read16(Rdata_ptr, &packet->additional[i].rdlength);
+            /*data*/
+            packet->additional[i].rdata = (char *)malloc(sizeof(char) * packet->additional[i].rdlength);
+            memcpy(packet->additional[i].rdata, Rdata_ptr, packet->additional[i].rdlength);
+            Rdata_ptr += packet->additional[i].rdlength;
+
+            if (Rdata_ptr > buffer->data + buffer->length + 1) // 指针越界
+            {
+                buffer->length = 0;
+                *packet = init_DNSpacket();
+                return; // 返回一个空包
+            }
+        }
+    }
+    else
+    {
+        packet->additional = NULL;
     }
 }
 

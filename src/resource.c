@@ -9,7 +9,7 @@ void relay_table_init()
 {
     trie_init();
     // 打开拦截列表文件
-    FILE *fp = fopen("D:\\ComputerNetworking\\dnsserver\\src\\relaylist.dic", "r");
+    FILE *fp = fopen("E:\\dnsserver\\src\\relaylist.dic", "r");
     if (fp == NULL)
     {
         perror("fopen error");
@@ -180,6 +180,7 @@ bool cache_search(char *name, IP_NODE *ip_list, int *actual_ip_cnt)
         }
         if (ret == true)
         {
+            printf("[CACHE] Hit cache\n");
             list_for_each(pos, &cache_list.list)
             {
                 entry = list_entry(pos, CACHE_ENTRY, list);
