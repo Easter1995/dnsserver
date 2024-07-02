@@ -13,7 +13,7 @@
 // #define THREAD_COUNT_LOW  2    // 低任务量
 // #define THREAD_COUNT_MEDIUM  4 // 中等任务量
 // #define THREAD_COUNT_HIGH  8   // 高任务量
-#define THREAD_COUNT  3 
+#define THREAD_COUNT  1 
 
 /**
  * 定义任务结构

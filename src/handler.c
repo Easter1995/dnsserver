@@ -108,13 +108,14 @@ unsigned __stdcall worker_thread(void *arg)
                 return 0;
             }
             if (dnspacket.question->Qtype == 1)
-            { // 只有当请求的资源类型为ipv4时，服务器做出回应
-                uint32_t found_ip; // 用于存储找到的IP
+            {                         // 只有当请求的资源类型为ipv4时，服务器做出回应
+                uint32_t found_ip[1]; // 用于存储找到的IP
                 // 先在本地relaylist中查找
-                if (trie_search(dnspacket.question->name, &found_ip)) // 若在relayList中找到了
+                if (trie_search(dnspacket.question->name, &found_ip[0])) // 若在relayList中找到了
                 {
                     prepare_answerPacket(found_ip, &dnspacket, 1);
-                    if (found_ip == 0) {
+                    if (found_ip == 0)
+                    {
                         printf("[BLOCK] Hit block domain name!\n");
                     }
                     if (runtime->config.debug)
@@ -138,48 +139,50 @@ unsigned __stdcall worker_thread(void *arg)
                     else
                         printf("[SEND] Sent %d bytes from relaylist to client.\n", sendBytes);
                 }
-                // 若在relaylist中不存在，则再在cache中搜索
-                int actual_ip_cnt = 0;
-                uint32_t target_ip[MAX_IP_COUNT];
-                bool find_result = cache_search(dnspacket.question->name, target_ip, &actual_ip_cnt);
-                if (find_result)
+                else
                 {
-                    // 若在cache中查询到了结果
-                    //prepare_answerPacket(target_ip, &dnspacket, actual_ip_cnt);
-                    if (runtime->config.debug)
-                    { // 输出调试信息
-                        printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
-                        DNSPacket_print(&dnspacket);
-                        runtime->totalCount++;
-                        printf("TOTAL COUNT %d\n", runtime->totalCount);
-                        printf("CACHE SIZE %d\n", cache_list.list_size);
+                    // 若在relaylist中不存在，则再在cache中搜索
+                    int actual_ip_cnt = 0;
+                    uint32_t target_ip[MAX_IP_COUNT];
+                    bool find_result = cache_search(dnspacket.question->name, target_ip, &actual_ip_cnt);
+                    if (find_result)
+                    {
+                        // 若在cache中查询到了结果
+                        // prepare_answerPacket(target_ip, &dnspacket, actual_ip_cnt);
+                        if (runtime->config.debug)
+                        { // 输出调试信息
+                            printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
+                            DNSPacket_print(&dnspacket);
+                            runtime->totalCount++;
+                            printf("TOTAL COUNT %d\n", runtime->totalCount);
+                            printf("CACHE SIZE %d\n", cache_list.list_size);
+                        }
+                        dnspacket.header->RA = 1;
+                        buffer = DNSPacket_encode(dnspacket); // 将DNS包转换为buffer，方便发送
+                        free(buffer.data);                    // 数据发送完后释放缓存
                     }
-                    dnspacket.header->RA = 1;
-                    buffer = DNSPacket_encode(dnspacket); // 将DNS包转换为buffer，方便发送
-                    free(buffer.data);                                                                                                                            // 数据发送完后释放缓存
-                }
-                /*若cache未命中，则需要向上级发送包进一步查询*/
-                IdMap mapItem;                             // 声明一个ID转换表
-                mapItem.addr = request->client_addr;       // 请求方的地址
-                mapItem.originalId = dnspacket.header->ID; // 请求方的ID
-                mapItem.time = time(NULL) + IDMAP_TIMEOUT; // 设置该记录的过期时间
-                runtime->maxId = setIdMap(runtime->idmap, mapItem, runtime->maxId);
-                dnspacket.header->ID = runtime->maxId;
-                // 发走
-                if (runtime->config.debug)
-                {
-                    printf("Send packet to upstream\n");
-                    DNSPacket_print(&dnspacket);
-                }
+                    /*若cache未命中，则需要向上级发送包进一步查询*/
+                    IdMap mapItem;                             // 声明一个ID转换表
+                    mapItem.addr = request->client_addr;       // 请求方的地址
+                    mapItem.originalId = dnspacket.header->ID; // 请求方的ID
+                    mapItem.time = time(NULL) + IDMAP_TIMEOUT; // 设置该记录的过期时间
+                    runtime->maxId = setIdMap(runtime->idmap, mapItem, runtime->maxId);
+                    dnspacket.header->ID = runtime->maxId;
+                    // 发走
+                    if (runtime->config.debug)
+                    {
+                        printf("Send packet to upstream\n");
+                        DNSPacket_print(&dnspacket);
+                    }
 
-
-                buffer = DNSPacket_encode(dnspacket);
-                DNSPacket_destroy(dnspacket);
-                int status = sendto(runtime->client, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&runtime->upstream_addr, sizeof(runtime->upstream_addr));
-                
+                    buffer = DNSPacket_encode(dnspacket);
+                    DNSPacket_destroy(dnspacket);
+                    int status = sendto(runtime->client, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&runtime->upstream_addr, sizeof(runtime->upstream_addr));
+                    free(buffer.data);
+                    free(request);
+                }
             }
-            free(buffer.data);
-            free(request);
+            
         }
     }
     return 0;
@@ -446,10 +449,14 @@ void prepare_answerPacket(uint32_t *ip, DNS_PKT *packet, int ip_count)
     packet->header->Rcode = 0;
     packet->header->QR = QRRESPONSE;
     packet->header->ANCOUNT = ip_count;
+    if(packet->header->RD == 1) {
+        packet->header->RA = 1;
+    }
     for (int i = 0; i < ip_count; i++)
     {
         uint32_t ip_network_order = htonl(ip[i]); // 将十进制的ip地址转换为网络字节序
-
+        packet->answer[i].rdata = (char *)malloc(sizeof(char) * 4);
+        strcpy(packet->answer[i].name, packet->question->name);
         packet->answer[i].type = A;
         packet->answer[i].addr_class = 1;
         packet->answer[i].TTL = DNS_RECORD_TTL;
@@ -536,7 +543,7 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
         DNSPacket_print(&packet);
         runtime->totalCount++;
         printf("TOTAL COUNT %d\n", runtime->totalCount);
-     } // 需要的话，输出调试信息
+    } // 需要的话，输出调试信息
     status = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client.addr, sizeof(client.addr));
     if (status == SOCKET_ERROR)
     {
@@ -560,8 +567,9 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
     }
     if (shouldCache)
     {
-        uint32_t* ip_Array = (uint32_t*)malloc(sizeof(uint32_t) * packet.header->ANCOUNT); // 创建一个IP数组，用于存储该域名的所有IP
-        for(int i = 0; i < packet.header->ANCOUNT; i++) {
+        uint32_t *ip_Array = (uint32_t *)malloc(sizeof(uint32_t) * packet.header->ANCOUNT); // 创建一个IP数组，用于存储该域名的所有IP
+        for (int i = 0; i < packet.header->ANCOUNT; i++)
+        {
             _read32((uint8_t *)packet.answer[i].rdata, &ip_Array[i]); // 将rdata中的IP地址写入ip_Arrray
         }
         cache_add(packet.answer[0].name, ip_Array, packet.answer[0].TTL, packet.header->ANCOUNT); // 该域名的所有IP地址以及其他信息存入cache中
@@ -677,7 +685,7 @@ void DNSPacket_decode(Buffer *buffer, DNS_PKT *packet)
             return;
         }
         packet->question[0].name[0] = (char *)malloc((strlen(Rdata_ptr)) * sizeof(char));
-        Rdata_ptr += getURL((char *)Rdata_ptr,(char *)buffer->data, packet->question[0].name);
+        Rdata_ptr += getURL((char *)Rdata_ptr, (char *)buffer->data, packet->question[0].name);
         packet->question[0].Qtype = (uint16_t)(Rdata_ptr[0] << 8) + Rdata_ptr[1];
         packet->question[0].Qclass = (uint16_t)(Rdata_ptr[2] << 8) + Rdata_ptr[3];
         Rdata_ptr += 4;
@@ -824,7 +832,7 @@ Buffer DNSPacket_encode(DNS_PKT packet)
     data += offset;
     offset = _write16(data, packet.header->ARCOUNT);
     data += offset;
-    uint8_t *question_ptr=data;
+    uint8_t *question_ptr = data;
     /* Questions */
     offset = toQname(packet.question[0].name, (char *)data);
     data += offset;
@@ -835,17 +843,19 @@ Buffer DNSPacket_encode(DNS_PKT packet)
     /* Answers */
     for (int i = 0; i < packet.header->ANCOUNT; i++)
     {
-        //考虑压缩指针问题
-        uint16_t new_offset=isFind_repeatDomain((char *)packet.question,(char *)packet.answer[i].name,(char *)question_ptr,(char *)buffer.data);
-        if(offset>=0){
+        // 考虑压缩指针问题
+        uint16_t new_offset = isFind_repeatDomain((char *)packet.question, (char *)packet.answer[i].name, (char *)question_ptr, (char *)buffer.data);
+        if (offset >= 0)
+        {
             int16_t compressed_pointer = DNS_COMPRESSION_POINTER(new_offset);
-            offset = _write16(data,compressed_pointer);
+            offset = _write16(data, compressed_pointer);
         }
-        else {
+        else
+        {
             offset = toQname(packet.answer[i].name, (char *)data);
         }
         data += offset;
-        offset = _write16(data + offset, packet.answer[i].type);
+        offset = _write16(data, packet.answer[i].type);
         data += offset;
         offset = _write16(data, packet.answer[i].addr_class);
         data += offset;
@@ -895,33 +905,35 @@ Buffer DNSPacket_encode(DNS_PKT packet)
 /**
  * 判断当前域名是否重复,如果重复则返回压缩指针偏移量，否则返回-1
  */
-int isFind_repeatDomain(char *question_name,char *answer_name,char *question,char *start){
-    if(strcmp(answer_name,question_name)==0)
+int isFind_repeatDomain(char *question_name, char *answer_name, char *question, char *start)
+{
+    if (strcmp(answer_name, question_name) == 0)
     {
-        return question-start;
-    }else
+        return question - start;
+    }
+    else
         return -1;
 }
 /**
  * 解析域名（给出点分十进制）
  */
-int getURL(char *ptr, char *start, char *newStr)//传入当前指针指向位置和buffer中data的首地址，newStr指向返回的域名
+int getURL(char *ptr, char *start, char *newStr) // 传入当前指针指向位置和buffer中data的首地址，newStr指向返回的域名
 {
     newStr[0] = '\0';
     int len = 0;
     int dot = 0;
     if ((unsigned char)ptr[0] >= 0xC0)
-    { // 前两位是11，说明该域名字段是压缩指针的形式
-        int offset = ((unsigned char)ptr[0] << 8 | (unsigned char)ptr[1]) & 0xfff;//压缩指针偏移量
-        getURL(start + offset, start, newStr);//递归查询域名
-        return 2;                   //压缩指针占两字节
+    {                                                                              // 前两位是11，说明该域名字段是压缩指针的形式
+        int offset = ((unsigned char)ptr[0] << 8 | (unsigned char)ptr[1]) & 0xfff; // 压缩指针偏移量
+        getURL(start + offset, start, newStr);                                     // 递归查询域名
+        return 2;                                                                  // 压缩指针占两字节
     }
-    else//解析普通域名
+    else // 解析普通域名
     {
-        int len = strlen(ptr);      // 计算该域名的长度
-        int idx = 0;                // 点分十进制域名字符下标
-        int bias = ptr[0];          // 决定接下来复制字符数量
-        int i = 1;                  //当前处理字节数
+        int len = strlen(ptr); // 计算该域名的长度
+        int idx = 0;           // 点分十进制域名字符下标
+        int bias = ptr[0];     // 决定接下来复制字符数量
+        int i = 1;             // 当前处理字节数
         while (i < len)
         {
             for (int j = 0; j < bias; j++)
@@ -930,15 +942,15 @@ int getURL(char *ptr, char *start, char *newStr)//传入当前指针指向位置
                 idx++;
                 i++;
             }
-            bias = ptr[i];          // 计算该域名下一段的长度
+            bias = ptr[i]; // 计算该域名下一段的长度
             if (bias == 0 || i >= len)
                 break;
             i++;
             newStr[idx] = '.';
             idx++;
         }
-        newStr[idx]='\0';           //标志字符串结束
-        return len+1;               //返回读取数据的指针的偏移量
+        newStr[idx] = '\0'; // 标志字符串结束
+        return len + 1;     // 返回读取数据的指针的偏移量
     }
 }
 
