@@ -2,7 +2,10 @@
 #include "config.h"
 #include "resource.h"
 #define MAXCACHE 1024
-/* 初始化DNS服务器配置 */
+
+/**
+ * 初始化DNS服务器配置
+ */
 DNS_CONFIG config_init(int argc, char *argv[]) {
     DNS_CONFIG config;
     config.block_list = FALSE;
@@ -27,6 +30,7 @@ DNS_CONFIG config_init(int argc, char *argv[]) {
     }
     return config;
 }
+
 /**
  * 运行时初始化
  */
@@ -52,13 +56,4 @@ void destroyRuntime(DNS_RUNTIME *runtime) {
     closesocket(runtime->server);
     closesocket(runtime->client);
     free(runtime->idmap);
-}
-
-/* IDMap的初始化 */
-IdMap *initIdMap(){
-    IdMap *idmap = (IdMap *)malloc(sizeof(IdMap) * (MAXID + 1)); // 为0-65535共65536个id的IdMap分配空间
-    for(int i=0; i <= MAXID; i++){
-        idmap[i].time = 0; // 把每一个id的过期时间初始化为0
-    }
-    return idmap;
 }

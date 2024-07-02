@@ -169,7 +169,7 @@ unsigned __stdcall worker_thread(void *arg)
                         else
                             printf("[SEND] Sent %d bytes from cache to client.\n", sendBytes);
                     }
-                    /*若cache未命中，则需要向上级发送包进一步查询*/
+                    //若cache未命中，则需要向上级发送包进一步查询
                     IdMap mapItem;                             // 声明一个ID转换表
                     mapItem.addr = request->client_addr;       // 请求方的地址
                     mapItem.originalId = dnspacket.header->ID; // 请求方的ID
@@ -524,7 +524,7 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
 
     if (status <= 0)
     {
-        // 接收失败 ———— 空包，甚至不需要destroy
+        // 接收失败
         free(buffer.data);
         return;
     }
@@ -533,10 +533,10 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
 
     _write16(buffer.data, client.originalId);
 
-    /*将接收到的上游应答 发送回客户端*/
+    //将接收到的上游应答 发送回客户端
     if (runtime->config.debug)
     {
-        char clientIp[16]; // Assuming IPv4 address can fit in 16 bytes (xxx.xxx.xxx.xxx\0)
+        char clientIp[16]; // (xxx.xxx.xxx.xxx\0)
         int clientIpLen = sizeof(clientIp);
         if (WSAAddressToStringA((LPSOCKADDR)&client.addr, sizeof(client.addr), NULL, clientIp, &clientIpLen) != 0)
         {
@@ -567,7 +567,7 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
     {
         printf("Error sendto: %d\n", WSAGetLastError());
     }
-    /*判断是否应该缓存*/
+    //判断是否应该缓存
     int shouldCache = 1;
     if (packet.header->Rcode != OK || packet.question->Qtype != A || packet.header->ANCOUNT < 1)
     {
@@ -658,20 +658,20 @@ void DNSPacket_decode(Buffer *buffer, DNS_PKT *packet)
 {
     uint8_t *Rdata_ptr = buffer->data;
     uint8_t tmp8;
-    /*Transaction ID*/
+    // Transaction ID
     Rdata_ptr = _read16(Rdata_ptr, &packet->header->ID); // 一次读16位
-    /* QR+OP+AA+TC+RD */
+    // QR+OP+AA+TC+RD
     Rdata_ptr = _read8(Rdata_ptr, &tmp8); // 一次读8位
     packet->header->QR = (DNSPacketQR)(tmp8 >> 7 & 0x01);
     packet->header->Opcode = (DNSPacketOP)(tmp8 >> 3 & 0x0F);
     packet->header->AA = tmp8 >> 2 & 0x01;
     packet->header->TC = tmp8 >> 1 & 0x01;
     packet->header->RD = tmp8 >> 0 & 0x01;
-    /* RA+padding(3)+RCODE */
+    // RA+padding(3)+RCODE
     Rdata_ptr = _read8(Rdata_ptr, &tmp8);
     packet->header->RA = tmp8 >> 7 & 0x01;
     packet->header->Rcode = (DNSPacketRC)(tmp8 & 0xF);
-    /* Counts */
+    // Counts
     Rdata_ptr = _read16(Rdata_ptr, &packet->header->QDCOUNT);
     Rdata_ptr = _read16(Rdata_ptr, &packet->header->ANCOUNT);
     Rdata_ptr = _read16(Rdata_ptr, &packet->header->NSCOUNT);
@@ -681,7 +681,7 @@ void DNSPacket_decode(Buffer *buffer, DNS_PKT *packet)
         buffer->length = 0;
         return packet;
     }
-    /* Questions */
+    // Questions
     if (packet->header->QDCOUNT > 0)
     {
         packet->question = (DNS_QUESTION *)malloc(sizeof(DNS_QUESTION) * packet->header->QDCOUNT);
@@ -693,32 +693,32 @@ void DNSPacket_decode(Buffer *buffer, DNS_PKT *packet)
             return;
         }
         packet->question[0].name[0] = (char *)malloc((strlen(Rdata_ptr)) * sizeof(char));
-        Rdata_ptr += getURL((char *)Rdata_ptr, (char *)buffer->data, packet->question[0].name);
+        Rdata_ptr += toDot((char *)Rdata_ptr, (char *)buffer->data, packet->question[0].name);
         packet->question[0].Qtype = (uint16_t)(Rdata_ptr[0] << 8) + Rdata_ptr[1];
         packet->question[0].Qclass = (uint16_t)(Rdata_ptr[2] << 8) + Rdata_ptr[3];
         Rdata_ptr += 4;
     }
-    /* Answers */
+    // Answers
     if (packet->header->ANCOUNT > 0)
     {
         packet->answer = (DNS_RECORD *)malloc(sizeof(DNS_RECORD) * packet->header->ANCOUNT); // 根据头部记录answer的数量来malloc指定空间
-        /*Name*/
+        // Name
         for (int i = 0; i < packet->header->ANCOUNT; i++)
         {
 
-            Rdata_ptr += getURL((char *)Rdata_ptr, (char *)buffer->data, packet->answer[i].name);
-            /*Type*/
+            Rdata_ptr += toDot((char *)Rdata_ptr, (char *)buffer->data, packet->answer[i].name);
+            // Type
             uint16_t tmp;
             Rdata_ptr = _read16(Rdata_ptr, &tmp);
             packet->answer[i].type = (DNSQType)tmp;
-            /*Class*/
+            // Class
             Rdata_ptr = _read16(Rdata_ptr, &tmp);
             packet->answer[i].addr_class = (uint16_t)tmp;
-            /*Time to live*/
+            // Time to live
             Rdata_ptr = _read32(Rdata_ptr, &packet->answer[i].TTL);
-            /*Data length*/
+            // Data length
             Rdata_ptr = _read16(Rdata_ptr, &packet->answer[i].rdlength);
-            /*data*/
+            // data
             packet->answer[i].rdata = (char *)malloc(sizeof(char) * packet->answer[i].rdlength);
             memcpy(packet->answer[i].rdata, Rdata_ptr, packet->answer[i].rdlength);
             Rdata_ptr += packet->answer[i].rdlength;
@@ -735,27 +735,27 @@ void DNSPacket_decode(Buffer *buffer, DNS_PKT *packet)
     {
         packet->answer = NULL;
     }
-    /* Authority */
+    // Authority
     if (packet->header->NSCOUNT > 0)
     {
         packet->authority = (DNS_RECORD *)malloc(sizeof(DNS_RECORD) * packet->header->NSCOUNT);
-        /*Name*/
+        // Name
         for (int i = 0; i < packet->header->NSCOUNT; i++)
         {
 
-            Rdata_ptr += getURL((char *)Rdata_ptr, (char *)buffer->data, packet->authority[i].name);
-            /*Type*/
+            Rdata_ptr += toDot((char *)Rdata_ptr, (char *)buffer->data, packet->authority[i].name);
+            // Type
             uint16_t tmp;
             Rdata_ptr = _read16(Rdata_ptr, &tmp);
             packet->authority[i].type = (DNSQType)tmp;
-            /*Class*/
+            // Class
             Rdata_ptr = _read16(Rdata_ptr, &tmp);
             packet->authority[i].addr_class = (uint16_t)tmp;
-            /*Time to live*/
+            // Time to live
             Rdata_ptr = _read32(Rdata_ptr, &packet->authority[i].TTL);
-            /*Data length*/
+            // Data length
             Rdata_ptr = _read16(Rdata_ptr, &packet->authority[i].rdlength);
-            /*data*/
+            // data
             packet->authority[i].rdata = (char *)malloc(sizeof(char) * packet->authority[i].rdlength);
             memcpy(packet->authority[i].rdata, Rdata_ptr, packet->authority[i].rdlength);
             Rdata_ptr += packet->authority[i].rdlength;
@@ -775,23 +775,23 @@ void DNSPacket_decode(Buffer *buffer, DNS_PKT *packet)
     if (packet->header->ARCOUNT > 0)
     {
         packet->additional = (DNS_RECORD *)malloc(sizeof(DNS_RECORD) * packet->header->ANCOUNT); // 根据头部记录answer的数量来malloc指定空间
-        /*Name*/
+        // Name
         for (int i = 0; i < packet->header->ANCOUNT; i++)
         {
 
-            Rdata_ptr += getURL((char *)Rdata_ptr, (char *)buffer->data, packet->additional[i].name);
-            /*Type*/
+            Rdata_ptr += toDot((char *)Rdata_ptr, (char *)buffer->data, packet->additional[i].name);
+            // Type
             uint16_t tmp;
             Rdata_ptr = _read16(Rdata_ptr, &tmp);
             packet->additional[i].type = (DNSQType)tmp;
-            /*Class*/
+            // Class
             Rdata_ptr = _read16(Rdata_ptr, &tmp);
             packet->additional[i].addr_class = (uint16_t)tmp;
-            /*Time to live*/
+            // Time to live
             Rdata_ptr = _read32(Rdata_ptr, &packet->additional[i].TTL);
-            /*Data length*/
+            // Data length
             Rdata_ptr = _read16(Rdata_ptr, &packet->additional[i].rdlength);
-            /*data*/
+            // data
             packet->additional[i].rdata = (char *)malloc(sizeof(char) * packet->additional[i].rdlength);
             memcpy(packet->additional[i].rdata, Rdata_ptr, packet->additional[i].rdlength);
             Rdata_ptr += packet->additional[i].rdlength;
@@ -818,20 +818,20 @@ Buffer DNSPacket_encode(DNS_PKT packet)
     Buffer buffer = makeBuffer(DNS_PACKET_SIZE);
     uint8_t *data = buffer.data;
     uint8_t offset = 0;
-    /* Header */
+    // Header
     offset = _write16(data, packet.header->ID);
     data += offset;
-    /* QR+OP+AA+TC+RD */
+    // QR+OP+AA+TC+RD
     offset = _write8(data, packet.header->QR << 7 |
                                packet.header->Opcode << 3 |
                                packet.header->AA << 2 |
                                packet.header->TC << 1 |
                                packet.header->RD << 0);
     data += offset;
-    /* RA+padding(3)+RCODE */
+    // RA+padding(3)+RCODE
     offset = _write8(data, packet.header->RA << 7 | packet.header->Rcode);
     data += offset;
-    /* Counts */
+    // Counts
     offset = _write16(data, packet.header->QDCOUNT);
     data += offset;
     offset = _write16(data, packet.header->ANCOUNT);
@@ -841,14 +841,14 @@ Buffer DNSPacket_encode(DNS_PKT packet)
     offset = _write16(data, packet.header->ARCOUNT);
     data += offset;
     uint8_t *question_ptr = data;
-    /* Questions */
+    // Questions
     offset = toQname(packet.question[0].name, (char *)data);
     data += offset;
     offset = _write16(data, packet.question[0].Qtype);
     data += offset;
     offset = _write16(data, packet.question[0].Qclass);
     data += offset;
-    /* Answers */
+    // Answers
     for (int i = 0; i < packet.header->ANCOUNT; i++)
     {
         // 考虑压缩指针问题
@@ -874,7 +874,7 @@ Buffer DNSPacket_encode(DNS_PKT packet)
         memcpy(data, packet.answer[i].rdata, packet.answer[i].rdlength);
         data += packet.answer[i].rdlength;
     }
-    /* Authorities */
+    // Authorities
     for (int i = 0; i < packet.header->NSCOUNT; i++)
     {
         offset = toQname(packet.authority[i].name, (char *)data);
@@ -890,7 +890,7 @@ Buffer DNSPacket_encode(DNS_PKT packet)
         memcpy(data, packet.authority[i].rdata, packet.authority[i].rdlength);
         data += packet.authority[i].rdlength;
     }
-    /* Additional */
+    // Additional
     for (int i = 0; i < packet.header->ARCOUNT; i++)
     {
         offset = toQname(packet.additional[i].name, (char *)data);
@@ -922,10 +922,11 @@ int isFind_repeatDomain(char *question_name, char *answer_name, char *question, 
     else
         return -1;
 }
+
 /**
- * 解析域名（给出点分十进制）
+ * 解析域名（把数字形式转换成点分形式：5baidu3com0 -> baidu.com）
  */
-int getURL(char *ptr, char *start, char *newStr) // 传入当前指针指向位置和buffer中data的首地址，newStr指向返回的域名
+int toDot(char *ptr, char *start, char *newStr) // 传入当前指针指向位置和buffer中data的首地址，newStr指向返回的域名
 {
     newStr[0] = '\0';
     int len = 0;
@@ -933,13 +934,13 @@ int getURL(char *ptr, char *start, char *newStr) // 传入当前指针指向位�
     if ((unsigned char)ptr[0] >= 0xC0)
     {                                                                              // 前两位是11，说明该域名字段是压缩指针的形式
         int offset = ((unsigned char)ptr[0] << 8 | (unsigned char)ptr[1]) & 0xfff; // 压缩指针偏移量
-        getURL(start + offset, start, newStr);                                     // 递归查询域名
+        toDot(start + offset, start, newStr);                                     // 递归查询域名
         return 2;                                                                  // 压缩指针占两字节
     }
     else // 解析普通域名
     {
         int len = strlen(ptr); // 计算该域名的长度
-        int idx = 0;           // 点分十进制域名字符下标
+        int idx = 0;           // 点分形式域名字符下标
         int bias = ptr[0];     // 决定接下来复制字符数量
         int i = 1;             // 当前处理字节数
         while (i < len)
@@ -963,7 +964,7 @@ int getURL(char *ptr, char *start, char *newStr) // 传入当前指针指向位�
 }
 
 /**
- * 解析域名（将点分十进制换为标准模式）
+ * 解析域名（把点分形式转换成数字形式：baidu.com -> 5baidu3com0）
  */
 uint8_t toQname(char *name, char *data)
 {
@@ -1021,28 +1022,4 @@ uint8_t _write8(uint8_t *ptr, uint8_t value)
 {
     *(uint8_t *)ptr = value;
     return 1;
-}
-
-/* 寻找空闲会话id */
-uint16_t setIdMap(IdMap *idMap, IdMap item, uint16_t curMaxId)
-{
-    uint16_t originId = curMaxId; // 暂存上次向上级发出查询请求时的会话id
-    time_t t = time(NULL);        // 将t设为当前时间
-    while (idMap[curMaxId].time >= t)
-    {                            // 从上次的会话id开始，寻找空闲id，若过期时间大于当前时间说明id正在被占用
-        curMaxId++;              // 若当前id正在被占用，则id++，查看下一个id是否可用
-        curMaxId %= (MAXID + 1); // 防止id号超过65535
-        if (curMaxId == originId)
-        {              // 如果找了一整圈，回到起始的id，说明所有id都被占用，无可用的id号
-            return -1; // id分配失败
-        }
-    }
-    idMap[curMaxId % (MAXID + 1)] = item; // 将runtime中的idMap数组的信息更新
-    return curMaxId % (MAXID + 1);        // 将当前空闲id设为本次向上游服务器发出请求的id
-}
-
-IdMap getIdMap(IdMap *idMap, uint16_t i)
-{
-    idMap[i].time = 0; // 归还原来的会话id，把过期时间还原为0
-    return idMap[i];   // 返回会话id对应的idMap项
 }

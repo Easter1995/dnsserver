@@ -3,12 +3,12 @@
 uint32_t block_table_number = 0;
 
 /**
- * 初始化拦截列表
+ * 初始化域名-ip对照表
  */
 void relay_table_init()
 {
     trie_init();
-    // 打开拦截列表文件
+    // 打开域名-ip对照表文件
     FILE *fp = fopen("E:\\dnsserver\\src\\relaylist.dic", "r");
     if (fp == NULL)
     {
@@ -29,6 +29,44 @@ void relay_table_init()
         trie_insert(name, ipv4);
     }
     fclose(fp); // 关闭文件
+}
+
+/**
+ * IDMap的初始化
+ */
+IdMap *initIdMap(){
+    IdMap *idmap = (IdMap *)malloc(sizeof(IdMap) * (MAXID + 1)); // 为0-65535共65536个id的IdMap分配空间
+    for(int i=0; i <= MAXID; i++){
+        idmap[i].time = 0; // 把每一个id的过期时间初始化为0
+    }
+    return idmap;
+}
+
+
+uint16_t setIdMap(IdMap *idMap, IdMap item, uint16_t curMaxId)
+{
+    uint16_t originId = curMaxId; // 暂存上次向上级发出查询请求时的会话id
+    time_t t = time(NULL);        // 将t设为当前时间
+    while (idMap[curMaxId].time >= t)
+    {                            // 从上次的会话id开始，寻找空闲id，若过期时间大于当前时间说明id正在被占用
+        curMaxId++;              // 若当前id正在被占用，则id++，查看下一个id是否可用
+        curMaxId %= (MAXID + 1); // 防止id号超过65535
+        if (curMaxId == originId)
+        {              // 如果找了一整圈，回到起始的id，说明所有id都被占用，无可用的id号
+            return -1; // id分配失败
+        }
+    }
+    idMap[curMaxId % (MAXID + 1)] = item; // 将runtime中的idMap数组的信息更新
+    return curMaxId % (MAXID + 1);        // 将当前空闲id设为本次向上游服务器发出请求的id
+}
+
+/**
+ * 释放会话id并返回会话id对应的IdMap信息
+ */
+IdMap getIdMap(IdMap *idMap, uint16_t i)
+{
+    idMap[i].time = 0; // 归还原来的会话id，把过期时间还原为0
+    return idMap[i];   // 返回会话id对应的idMap项
 }
 
 /**
@@ -226,3 +264,4 @@ uint32_t ip_to_u32(char ip[IPv4_LEN])
     uint32_t ipv4 = temp_ip[0] * 256 * 256 * 256 + temp_ip[1] * 256 * 256 + temp_ip[2] * 256 + temp_ip[3];
     return ipv4;
 }
+

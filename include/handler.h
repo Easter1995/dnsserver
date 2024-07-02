@@ -27,22 +27,22 @@ unsigned __stdcall worker_thread(void* arg);
 /* 初始化一个DNS空包 */
 DNS_PKT init_DNSpacket();
 
-/*主循环*/
+/* 主循环 */
 void loop(DNS_RUNTIME *runtime);
 
-/*处理上游应答*/
+/* 处理上游应答 */
 void HandleFromUpstream(DNS_RUNTIME *runtime);
 
-/*创建一个缓冲区*/
+/* 创建一个缓冲区 */
 Buffer makeBuffer(int len);
 
-/*标准形式转点分十进制*/
-int getURL(char *ptr, char *start, char *newStr);
+/* 数字形式转换成点分形式 */
+int toDot(char *ptr, char *start, char *newStr);
 
-/*点分十进制转标准形式*/
+/* 点分形式转换成数字形式 */
 uint8_t toQname(char *name, char *data);
 
-/*读取数据时指针的移动*/
+/* 读取数据时指针的移动 */
 uint8_t *_read32(uint8_t *ptr, uint32_t *value);
 uint8_t _write32(uint8_t *ptr, uint32_t value);
 uint8_t *_read16(uint8_t *ptr, uint16_t *value);
@@ -50,16 +50,16 @@ uint8_t _write16(uint8_t *ptr, uint16_t value);
 uint8_t *_read8(uint8_t *ptr, uint8_t *value);
 uint8_t _write8(uint8_t *ptr, uint8_t value);
 
-/*寻找空闲会话id*/
+/* 寻找空闲会话id */
 uint16_t setIdMap(IdMap *idMap, IdMap item, uint16_t curMaxId);
 
-/*释放会话id并返回会话id对应的IdMap信息*/
+/* 释放会话id并返回会话id对应的IdMap信息 */
 IdMap getIdMap(IdMap *idMap, uint16_t i);
 
-/*接受DNS包*/
+/* 接受DNS包 */
 DNS_PKT recvPacket(DNS_RUNTIME *runtime, SOCKET socket, Buffer *buffer, struct sockaddr_in *client_Addr, int *error);
 
-/*生成回应包*/
+/* 生成回应包 */
 void prepare_answerPacket(uint32_t *ip, DNS_PKT *packet, int ip_count);
 
 #endif

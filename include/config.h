@@ -3,21 +3,11 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 #define IDMAP_TIMEOUT 5
-#define MAXID 65535
 #include "list.h"
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <stdint.h>
 #pragma comment(lib, "Ws2_32.lib")
-
-/**
- * 定义id表
- */
-typedef struct idMap {
-    time_t time;             //过期时间
-    uint16_t originalId;     //请求方ID
-    struct sockaddr_in addr; //请求方IP+端口
-} IdMap;
 
 /* DNS服务器的配置 */
 typedef struct DNS_CONFIG {
@@ -35,7 +25,7 @@ typedef struct DNS_RUNTIME {
     boolean quit;                     // 程序是否退出
     SOCKET server;                    // 接受请求的socket
     SOCKET client;                    // 与上级连接的socket
-    IdMap *idmap;                     //ID转换表 （ID：对一次DNS请求的标识，用于确定请求方）
+    IdMap *idmap;                     // ID转换表 （ID：对一次DNS请求的标识，用于确定请求方）
     uint16_t maxId;                   //上一次请求上级时所使用的ID号
     struct sockaddr_in listen_addr;   // 监听地址
     struct sockaddr_in upstream_addr; // 上级DNS服务器地址
