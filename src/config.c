@@ -27,6 +27,13 @@ DNS_CONFIG config_init(int argc, char *argv[]) {
             // 开启debug模式
             config.debug = TRUE;
         }
+        else if (strcmp("-dd", argv[i]) == 0)
+        {
+            // 开启二级debug模式
+            config.debug = TRUE;
+            config.debug_2 = TRUE;
+        }
+        
     }
     return config;
 }

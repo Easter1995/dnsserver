@@ -4,6 +4,7 @@
 #define CONFIG_H
 #define IDMAP_TIMEOUT 5
 #include "list.h"
+#include "resource.h"
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <stdint.h>
@@ -12,6 +13,7 @@
 /* DNS服务器的配置 */
 typedef struct DNS_CONFIG {
     boolean debug;               // 是否输出debug信息
+    boolean debug_2;             // 二级调试信息
     boolean block_list;          // 是否有拦截网站
     int port;                    //监听端口号
     char upstream_server_IP[16]; // 上游DNS服务器的IP
@@ -39,12 +41,6 @@ DNS_RUNTIME runtime_init(DNS_CONFIG *config);
 
 /* 销毁运行时 */
 void destroyRuntime(DNS_RUNTIME *runtime);
-
-IdMap *initIdMap();
-
-IdMap getIdMap(IdMap *idMap, uint16_t i);
-
-uint16_t setIdMap(IdMap *idMap, IdMap item, uint16_t curMaxId);
 
 /* 运行时 */
 DNS_RUNTIME runtime;

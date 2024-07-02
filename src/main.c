@@ -18,7 +18,7 @@ BOOL WINAPI console_handler(DWORD signal)
     destroyRuntime(&runtime);
 
     /* 等待工作线程结束工作 */
-    WaitForMultipleObjects(thread_pool.num_threads, thread_pool.threads, TRUE, INFINITE);
+    SetEvent(thread_pool.shutdown_event);
 
     /* 销毁线程池，销毁请求队列 */
     destroy_thread_pool();
@@ -55,22 +55,13 @@ int main(int argc, char **argv)
     cache_init();
 
     /* 初始化socket */
-    socket_init(&runtime);
+    socket_init(&runtime, &config);
 
     /* 设置Ctrl+C(SIGINT)时的友好退出  */
     SetConsoleCtrlHandler(console_handler, TRUE);
 
     /* 处理客户端请求 */
     loop(&runtime);
-
-    /* 等待工作线程结束工作 */
-    WaitForMultipleObjects(thread_pool.num_threads, thread_pool.threads, TRUE, INFINITE);
-
-    /* 销毁线程池，销毁请求队列 */
-    destroy_thread_pool();
-
-    /* 销毁运行时 */
-    destroyRuntime(&runtime);
 
     /* 程序退出 */
     WSACleanup();

@@ -3,7 +3,7 @@
 /**
  * 初始化socket
  */
-void socket_init(DNS_RUNTIME *runtime)
+void socket_init(DNS_RUNTIME *runtime, DNS_CONFIG *config)
 {
     WSADATA wsa_data;
     // 使用winsock2.2版本
@@ -73,7 +73,11 @@ void socket_init(DNS_RUNTIME *runtime)
     }
     runtime->upstream_addr.sin_addr = sa.sin_addr;
 
-    printf("Accepting connections ...\n");
+    printf("DNS Project v1.0 by Joy & Orangec & Rhea 2024.7\n");
+    printf("[DNS_RELAY_SERVER START] Accepting Connections from client ...\n");
+    printf("Listening on 0.0.0.0:%d with upstream %s\n", config->port, config->upstream_server_IP);
+    printf("\n");
+
 }
 
 /**
@@ -91,12 +95,18 @@ unsigned __stdcall worker_thread(void *arg)
         HANDLE events[] = {thread_pool.cond, thread_pool.shutdown_event};
         DWORD wait_result = WaitForMultipleObjects(2, events, FALSE, INFINITE);
 
-        printf("worker_thread start\n");
+        if (wait_result == WAIT_OBJECT_0 + 1)
+        {
+            return 0;
+        }
+        if (config.debug)
+            printf("[THREAD] Worker_thread start\n");
 
         Request *request = dequeue_task(&thread_pool.request_queue); // 获取请求
         if (request)
         {
-            printf("request received\n");
+            if (config.debug)
+                printf("[RECEIVE] Request from client received\n");
             struct sockaddr_in client_Addr = request->client_addr; // 获取客户端地址
             Buffer buffer = request->buffer;                       // 获取数据缓冲区
             DNS_PKT dnspacket = request->dns_packet;               // 获取接收到的dns包
@@ -114,17 +124,17 @@ unsigned __stdcall worker_thread(void *arg)
                 if (trie_search(dnspacket.question->name, &found_ip[0])) // 若在relayList中找到了
                 {
                     prepare_answerPacket(found_ip, &dnspacket, 1);
-                    if (found_ip == 0)
+                    if (found_ip[0] == 0)
                     {
-                        printf("[BLOCK] Hit block domain name!\n");
+                        if (config.debug)
+                            printf("[BLOCK] Hit block domain name!\n");
                     }
-                    if (runtime->config.debug)
+                    if (config.debug_2)
                     { // 输出调试信息
-                        printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
+                        printf("[SEND] Hit block, Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
                         DNSPacket_print(&dnspacket);
                         runtime->totalCount++;
-                        printf("Domain name blocked!\n");
-                        printf("TOTAL COUNT %d\n", runtime->totalCount);
+                        printf("\n");
                     }
 
                     buffer = DNSPacket_encode(dnspacket); // 将DNS包转换为buffer，方便发送
@@ -136,7 +146,7 @@ unsigned __stdcall worker_thread(void *arg)
                         printf("sendto failed: %d\n", WSAGetLastError());
                         WSACleanup();
                     }
-                    else
+                    else if (config.debug)
                         printf("[SEND] Sent %d bytes from relaylist to client.\n", sendBytes);
                 }
                 else
@@ -149,16 +159,15 @@ unsigned __stdcall worker_thread(void *arg)
                     {
                         // 若在cache中查询到了结果
                         prepare_answerPacket(target_ip, &dnspacket, actual_ip_cnt);
-                        if (runtime->config.debug)
+                        if (config.debug_2)
                         { // 输出调试信息
-                            printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
+                            printf("[Send] Cache hit, Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
                             DNSPacket_print(&dnspacket);
                             runtime->totalCount++;
-                            printf("TOTAL COUNT %d\n", runtime->totalCount);
-                            printf("CACHE SIZE %d\n", cache_list.list_size);
+                            printf("\n");
                         }
                         dnspacket.header->RA = 1;
-                        buffer = DNSPacket_encode(dnspacket); // 将DNS包转换为buffer，方便发送
+                        buffer = DNSPacket_encode(dnspacket);                                                                                                 // 将DNS包转换为buffer，方便发送
                         int sendBytes = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_Addr, sizeof(client_Addr)); // 由服务器发给客户端找到的ip信息
                         free(buffer.data);
                         if (sendBytes == SOCKET_ERROR)
@@ -166,10 +175,10 @@ unsigned __stdcall worker_thread(void *arg)
                             printf("sendto failed: %d\n", WSAGetLastError());
                             WSACleanup();
                         }
-                        else
-                            printf("[SEND] Sent %d bytes from cache to client.\n", sendBytes);
+                        else if (config.debug)
+                            printf("[SEND] Receive from upstream, sent %d bytes from cache to client.\n", sendBytes);
                     }
-                    //若cache未命中，则需要向上级发送包进一步查询
+                    // 若cache未命中，则需要向上级发送包进一步查询
                     IdMap mapItem;                             // 声明一个ID转换表
                     mapItem.addr = request->client_addr;       // 请求方的地址
                     mapItem.originalId = dnspacket.header->ID; // 请求方的ID
@@ -177,10 +186,11 @@ unsigned __stdcall worker_thread(void *arg)
                     runtime->maxId = setIdMap(runtime->idmap, mapItem, runtime->maxId);
                     dnspacket.header->ID = runtime->maxId;
                     // 发走
-                    if (runtime->config.debug)
+                    if (config.debug)
                     {
-                        printf("Send packet to upstream\n");
-                        DNSPacket_print(&dnspacket);
+                        printf("[SEND] Domain name not recorded, send packet to upstream\n");
+                        if (config.debug_2)
+                            DNSPacket_print(&dnspacket);
                     }
 
                     buffer = DNSPacket_encode(dnspacket);
@@ -190,7 +200,6 @@ unsigned __stdcall worker_thread(void *arg)
                     free(request);
                 }
             }
-            
         }
     }
     return 0;
@@ -457,7 +466,8 @@ void prepare_answerPacket(uint32_t *ip, DNS_PKT *packet, int ip_count)
     packet->header->Rcode = 0;
     packet->header->QR = QRRESPONSE;
     packet->header->ANCOUNT = ip_count;
-    if(packet->header->RD == 1) {
+    if (packet->header->RD == 1)
+    {
         packet->header->RA = 1;
     }
     for (int i = 0; i < ip_count; i++)
@@ -503,11 +513,11 @@ DNS_PKT recvPacket(DNS_RUNTIME *runtime, SOCKET socket, Buffer *buffer, struct s
     { // 输出debug信息
         if (socket == runtime->server)
         {
-            printf("Received packet from client %s:%d\n", inet_ntoa(client_Addr->sin_addr), ntohs(client_Addr->sin_port));
+            printf("[RECEIVE] Received packet from client %s:%d\n", inet_ntoa(client_Addr->sin_addr), ntohs(client_Addr->sin_port));
         }
         else
         {
-            printf("Received packet from upstream\n");
+            printf("[RECEIVE] Received packet from upstream\n");
         }
     }
     return packet;
@@ -533,7 +543,7 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
 
     _write16(buffer.data, client.originalId);
 
-    //将接收到的上游应答 发送回客户端
+    // 将接收到的上游应答 发送回客户端
     if (runtime->config.debug)
     {
         char clientIp[16]; // (xxx.xxx.xxx.xxx\0)
@@ -546,11 +556,9 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
             WSACleanup();
             exit(-1);
         }
-
-        printf("C<< Send packet back to client %s:%d\n", clientIp, ntohs(client.addr.sin_port));
-        DNSPacket_print(&packet);
+        if (config.debug_2)
+            DNSPacket_print(&packet);
         runtime->totalCount++;
-        printf("TOTAL COUNT %d\n", runtime->totalCount);
     } // 需要的话，输出调试信息
     status = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client.addr, sizeof(client.addr));
     if (status == SOCKET_ERROR)
@@ -567,7 +575,7 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
     {
         printf("Error sendto: %d\n", WSAGetLastError());
     }
-    //判断是否应该缓存
+    // 判断是否应该缓存
     int shouldCache = 1;
     if (packet.header->Rcode != OK || packet.question->Qtype != A || packet.header->ANCOUNT < 1)
     {
@@ -583,7 +591,7 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
         cache_add(packet.answer[0].name, ip_Array, packet.answer[0].TTL, packet.header->ANCOUNT); // 该域名的所有IP地址以及其他信息存入cache中
         if (runtime->config.debug)
         {
-            printf("ADDED TO CACHE\n");
+            printf("[CACHE] Added to cache\n");
         }
     }
     // 用完销毁
@@ -934,7 +942,7 @@ int toDot(char *ptr, char *start, char *newStr) // 传入当前指针指向位�
     if ((unsigned char)ptr[0] >= 0xC0)
     {                                                                              // 前两位是11，说明该域名字段是压缩指针的形式
         int offset = ((unsigned char)ptr[0] << 8 | (unsigned char)ptr[1]) & 0xfff; // 压缩指针偏移量
-        toDot(start + offset, start, newStr);                                     // 递归查询域名
+        toDot(start + offset, start, newStr);                                      // 递归查询域名
         return 2;                                                                  // 压缩指针占两字节
     }
     else // 解析普通域名
