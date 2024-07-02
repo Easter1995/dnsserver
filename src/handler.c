@@ -566,7 +566,7 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
         printf("sendto failed: %d\n", WSAGetLastError());
         WSACleanup();
     }
-    else
+    else if (config.debug)
     {
         printf("[SEND] Sent %d bytes response to client.\n", status);
     }
