@@ -143,12 +143,12 @@ unsigned __stdcall worker_thread(void *arg)
                 {
                     // 若在relaylist中不存在，则再在cache中搜索
                     int actual_ip_cnt = 0;
-                    uint32_t target_ip[MAX_IP_COUNT];
-                    bool find_result = cache_search(dnspacket.question->name, target_ip, &actual_ip_cnt);
+                    uint32_t *target_ip;
+                    bool find_result = cache_search(dnspacket.question->name, &target_ip, &actual_ip_cnt);
                     if (find_result)
                     {
                         // 若在cache中查询到了结果
-                        // prepare_answerPacket(target_ip, &dnspacket, actual_ip_cnt);
+                        prepare_answerPacket(target_ip, &dnspacket, actual_ip_cnt);
                         if (runtime->config.debug)
                         { // 输出调试信息
                             printf("Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
@@ -159,7 +159,15 @@ unsigned __stdcall worker_thread(void *arg)
                         }
                         dnspacket.header->RA = 1;
                         buffer = DNSPacket_encode(dnspacket); // 将DNS包转换为buffer，方便发送
-                        free(buffer.data);                    // 数据发送完后释放缓存
+                        int sendBytes = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client_Addr, sizeof(client_Addr)); // 由服务器发给客户端找到的ip信息
+                        free(buffer.data);
+                        if (sendBytes == SOCKET_ERROR)
+                        {
+                            printf("sendto failed: %d\n", WSAGetLastError());
+                            WSACleanup();
+                        }
+                        else
+                            printf("[SEND] Sent %d bytes from cache to client.\n", sendBytes);
                     }
                     /*若cache未命中，则需要向上级发送包进一步查询*/
                     IdMap mapItem;                             // 声明一个ID转换表
@@ -438,7 +446,7 @@ void DNSPacket_print(DNS_PKT *packet)
 void prepare_answerPacket(uint32_t *ip, DNS_PKT *packet, int ip_count)
 {
     // 表示域名不存在
-    if (ip == 0)
+    if (*ip == 0)
     {
         packet->header->ANCOUNT = 0;
         packet->header->Rcode = 3; // 返回域名不存在

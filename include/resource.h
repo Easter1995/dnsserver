@@ -48,7 +48,7 @@ typedef struct CACHE_ENTRY {
   struct list_head list; // 包含了这个节点的两个指针
   // 数据部分
   char name[NAME_LEN];
-  IP_NODE ip_list; // 当前域名包含的ip，用链表存储
+  uint32_t ip_list[MAX_IP_COUNT]; // 当前域名包含的ip
   time_t expireTime; // 超时时间
   uint32_t count; // LRU算法的计数器
   uint32_t ip_count; // 当前域名包含的ip个数
@@ -67,7 +67,7 @@ void cache_init();
 void cache_add(char *name, uint32_t* ip, uint32_t ttl, int ip_cnt);
 
 /* 查找cache */
-bool cache_search(char *name, IP_NODE *ip_list, int *actual_ip_cnt);
+bool cache_search(char *name, uint32_t **ip_list, int *actual_ip_cnt);
 
 /* cache列表，使用双向链表存储 */
 CACHE_LIST cache_list;
