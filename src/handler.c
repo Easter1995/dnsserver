@@ -147,7 +147,7 @@ unsigned __stdcall worker_thread(void *arg)
                         WSACleanup();
                     }
                     else if (config.debug)
-                        printf("[SEND] Sent %d bytes from relaylist to client.\n", sendBytes);
+                        printf("[SEND] Send %d bytes from relaylist to client.\n", sendBytes);
                 }
                 else
                 {
@@ -566,9 +566,9 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
         printf("sendto failed: %d\n", WSAGetLastError());
         WSACleanup();
     }
-    else
+    else if (config.debug)
     {
-        printf("[SEND] Sent %d bytes response to client.\n", status);
+        printf("[SEND] Send %d bytes response to client.\n", status);
     }
 
     if (status < buffer.length)

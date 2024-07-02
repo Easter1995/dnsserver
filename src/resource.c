@@ -9,7 +9,7 @@ void relay_table_init()
 {
     trie_init();
     // 打开域名-ip对照表文件
-    FILE *fp = fopen("E:\\dnsserver\\src\\relaylist.dic", "r");
+    FILE *fp = fopen("D:\\ComputerNetworking\\dnsserver\\src\\relaylist.dic", "r");
     if (fp == NULL)
     {
         perror("fopen error");
