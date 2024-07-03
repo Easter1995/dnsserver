@@ -30,7 +30,6 @@ typedef struct DNS_RUNTIME
     uint16_t maxId;                   // 上一次向上游服务器发送查询请求时所使用的ID号
     struct sockaddr_in listen_addr;   // 监听地址
     struct sockaddr_in upstream_addr; // 上级DNS服务器地址
-    int totalCount;
 } DNS_RUNTIME;
 
 /* 初始化配置 */

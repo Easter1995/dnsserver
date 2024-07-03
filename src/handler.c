@@ -132,7 +132,6 @@ unsigned __stdcall worker_thread(void *arg)
                     { // 输出调试信息
                         printf("[SEND] Hit block, Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
                         DNSPacket_print(&dnspacket);
-                        runtime->totalCount++;
                         printf("\n");
                     }
 
@@ -162,7 +161,6 @@ unsigned __stdcall worker_thread(void *arg)
                         { // 输出调试信息
                             printf("[Send] Cache hit, Send packet back to client %s:%d\n", inet_ntoa(client_Addr.sin_addr), ntohs(client_Addr.sin_port));
                             DNSPacket_print(&dnspacket);
-                            runtime->totalCount++;
                             printf("\n");
                         }
                         dnspacket.header->RA = 1;
@@ -555,7 +553,6 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
         }
         if (config.debug_2)
             DNSPacket_print(&packet);
-        runtime->totalCount++;
     } // 需要的话，输出调试信息
     status = sendto(runtime->server, (char *)buffer.data, buffer.length, 0, (struct sockaddr *)&client.addr, sizeof(client.addr));
     if (status == SOCKET_ERROR)

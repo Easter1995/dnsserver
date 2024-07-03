@@ -46,7 +46,6 @@ DNS_RUNTIME runtime_init(DNS_CONFIG *config)
     runtime.quit = FALSE;
     runtime.idmap = initIdMap();
     runtime.maxId = 0;
-    runtime.totalCount = 0;
     return runtime;
 }
 
