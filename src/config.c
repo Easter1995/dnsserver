@@ -9,7 +9,6 @@
 DNS_CONFIG config_init(int argc, char *argv[])
 {
     DNS_CONFIG config;
-    config.block_list = FALSE;
     config.debug = FALSE;
     config.port = 53;
     // 默认上游服务器IP
@@ -21,11 +20,6 @@ DNS_CONFIG config_init(int argc, char *argv[])
         {
             // 设定上游服务器IP
             strcpy(config.upstream_server_IP, argv[i + 1]);
-        }
-        else if (strcmp("-b", argv[i]) == 0)
-        {
-            // 设定有blocklist
-            config.block_list = TRUE;
         }
         else if (strcmp("-d", argv[i]) == 0)
         {

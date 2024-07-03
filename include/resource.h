@@ -15,7 +15,7 @@
 #define MAXID 65535
 
 /* 域名-ip对照表，使用字典树存储 */
-#define block_table trie
+#define relay_table trie
 
 /**
  * 域名-ip对照表
@@ -62,7 +62,7 @@ typedef struct CACHE_ENTRY
 {
   struct list_head list; // 包含了这个节点的两个指针
   // 数据部分
-  char name[NAME_LEN];
+  char name[NAME_LEN];            
   uint32_t ip_list[MAX_IP_COUNT]; // 当前域名包含的ip
   time_t expireTime;              // 超时时间
   uint32_t count;                 // LRU算法的计数器
@@ -72,7 +72,7 @@ typedef struct CACHE_ENTRY
 /* 点分十进制IPv4字符串转换为32位无符号数 */
 uint32_t ip_to_u32(char ip[IPv4_LEN]);
 
-/* 初始化拦截表 */
+/* 初始化域名-ip对照表 */
 void relay_table_init();
 
 /* 初始化cache */

@@ -1,7 +1,5 @@
 #include "resource.h"
 
-uint32_t block_table_number = 0;
-
 /**
  * 初始化域名-ip对照表
  */

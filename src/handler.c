@@ -538,9 +538,7 @@ void HandleFromUpstream(DNS_RUNTIME *runtime)
         return;
     }
     IdMap client = getIdMap(runtime->idmap, packet.header->ID);
-    packet.header->ID = client.originalId; // 还原id
-
-    _write16(buffer.data, client.originalId);
+    _write16(buffer.data, client.originalId); // 还原id
 
     // 将接收到的上游应答 发送回客户端
     if (runtime->config.debug)
