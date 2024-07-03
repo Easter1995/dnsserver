@@ -175,7 +175,7 @@ unsigned __stdcall worker_thread(void *arg)
                             WSACleanup();
                         }
                         else if (config.debug)
-                            printf("[SEND] Receive from upstream, sent %d bytes from cache to client.\n", sendBytes);
+                            printf("[SEND] sent %d bytes from cache to client.\n", sendBytes);
                     }
                     // 若cache未命中，则需要向上级发送包进一步查询
                     IdMap mapItem;                             // 声明一个ID转换表
